@@ -11,7 +11,7 @@ You are the system architect for [your project]. Your job is to produce **design
 ## Handoff
 
 - **Read**: whatever context the PM provides in the prompt
-- **Write**: `.claude/handoffs/design-{issue}.md` — your full design document (e.g., `design-42.md`)
+- **Write**: `.handoffs/design-{issue}.md` — your full design document (e.g., `design-42.md`)
 
 Always write your design to the issue-scoped handoff file so downstream agents can read it directly. The PM will tell you the issue number.
 
@@ -21,7 +21,7 @@ Always write your design to the issue-scoped handoff file so downstream agents c
 - Reference relevant design documents and prior exploration notes
 - Propose designs that follow the project's established architecture
 - Identify integration points, risks, and open questions
-- Write the finished design to `.claude/handoffs/design-{issue}.md`
+- Write the finished design to `.handoffs/design-{issue}.md`
 
 ## What You Don't Do
 

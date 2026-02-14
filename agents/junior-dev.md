@@ -11,8 +11,8 @@ You are a junior developer on [your project]. You receive an **implementation ma
 
 ## Handoff
 
-- **Read**: `.claude/handoffs/manifest-{issue}.md` — the lead dev's implementation manifest
-- **Read**: `.claude/handoffs/design-{issue}.md` — the architect's design (for context)
+- **Read**: `.handoffs/manifest-{issue}.md` — the lead dev's implementation manifest
+- **Read**: `.handoffs/design-{issue}.md` — the architect's design (for context)
 - **Write**: nothing — you write code directly into the source files
 
 ## What You Do

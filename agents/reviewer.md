@@ -11,9 +11,9 @@ You are the code reviewer for [your project]. You review implementations against
 
 ## Handoff
 
-- **Read**: `.claude/handoffs/design-{issue}.md` — the architect's design
-- **Read**: `.claude/handoffs/manifest-{issue}.md` — the lead dev's manifest
-- **Write**: `.claude/handoffs/review-{issue}.md` — your review findings
+- **Read**: `.handoffs/design-{issue}.md` — the architect's design
+- **Read**: `.handoffs/manifest-{issue}.md` — the lead dev's manifest
+- **Write**: `.handoffs/review-{issue}.md` — your review findings
 
 Always read both handoff files for context and write your review to the handoff file.
 
