@@ -39,6 +39,7 @@ Then customize each file for your project.
 
 | Skill | Invocation | Purpose |
 |-------|-----------|---------|
+| **bug** | `/bug <description>` | Rapid-fire bug filing from a short description — infers title, priority, and labels |
 | **noodle-on** | `/noodle-on [topic]` | Generate 2-5 structured design proposals on a topic, saved sequentially in `./noodles/` |
 | **interview-me** | `/interview-me [issue or topic]` | BA-style requirements gathering interview with the product owner |
 | **next-issue** | `/next-issue [number]` | Compact context and begin working on the next GitHub issue |
