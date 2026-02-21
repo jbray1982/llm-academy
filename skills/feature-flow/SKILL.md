@@ -31,7 +31,11 @@ After BA triage, report the assessment to the user and wait for approval before 
 
 1. Fetch the issue with `mcp__github__issue_read`.
 2. Display a brief summary (title, labels, acceptance criteria).
-3. Create an isolated git branch: `feature-flow/issue-<number>` from the default branch.
+3. Create an isolated git worktree for the issue:
+   ```bash
+   git worktree add .worktrees/issue-<number> -b feature-flow/issue-<number>
+   ```
+   All subsequent agents work inside the `.worktrees/issue-<number>/` directory.
 4. Check issue labels for special handling (see Label Handling below).
 
 ### Step 1: BA Triage (background agent)
@@ -108,15 +112,19 @@ The reviewer returns one of:
 
 ### Step 5: BA Cleanup (background agent)
 
-Launch a **ba** agent to:
+Launch a **ba** agent (working in the worktree directory) to:
 1. Stage and commit changes with an appropriate message (include `Co-Authored-By` attribution)
 2. Do NOT push yet
 
-After the BA agent completes:
-1. Switch to the default branch and merge the issue branch
+After the BA agent completes, from the **main working directory**:
+1. Merge the issue branch into the default branch: `git merge feature-flow/issue-<number>`
 2. Push to origin
 3. Close the issue with a summary comment
-4. Delete the issue branch
+4. Remove the worktree and delete the branch:
+   ```bash
+   git worktree remove .worktrees/issue-<number>
+   git branch -d feature-flow/issue-<number>
+   ```
 5. Handle dependency resolution (comment on dependent issues, remove `blocked` labels when all blockers resolved)
 
 Report the final result to the user.
@@ -159,25 +167,25 @@ If this issue unblocks other issues:
 
 - **Implementation fails (build/test errors):** Report the error, ask user if they want to retry or abort.
 - **Review rejects 3 times:** Stop and report. Ask user for manual intervention.
-- **Merge conflict:** Abort merge, report to user, leave branch intact for manual resolution.
+- **Merge conflict:** Abort merge, report to user, leave worktree intact for manual resolution.
 - **Agent fails:** Report the failure, offer to retry or skip the step.
 
 ## Git Workflow
 
-1. Before starting: `git checkout -b feature-flow/issue-<number>` from the default branch
-2. All work happens on the issue branch
-3. After review approval: commit on the issue branch (no push)
-4. After commit: checkout default branch, merge issue branch, push
-5. Cleanup: delete the issue branch
+1. Before starting: `git worktree add .worktrees/issue-<number> -b feature-flow/issue-<number>` from the default branch
+2. All agent work happens inside the `.worktrees/issue-<number>/` directory — the main working directory stays untouched
+3. After review approval: commit inside the worktree (no push)
+4. After commit: from the main working directory, merge the issue branch into the default branch, then push
+5. Cleanup: `git worktree remove .worktrees/issue-<number>` then `git branch -d feature-flow/issue-<number>`
 
-If anything fails during merge/push, leave the branch intact and report.
+If anything fails during merge/push, leave the worktree intact and report.
 
 ## Customization Points
 
 When adapting this skill for your project, update the following:
 
 1. **Build/test commands**: Replace references to build and test commands with your project's equivalents (e.g., `npm test`, `cargo build`, `dotnet test`, `make check`).
-2. **Branch naming**: Change `feature-flow/issue-<number>` to match your project's branch convention.
+2. **Branch/worktree naming**: Change `feature-flow/issue-<number>` and `.worktrees/issue-<number>` to match your project's convention.
 3. **Default branch**: The skill assumes `main` or `master` — adjust to your default branch name.
 4. **Co-Authored-By**: Update the attribution line to match your project's convention.
 5. **Labels**: Add or remove labels in the Label Handling section to match your workflow.
