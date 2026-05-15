@@ -67,3 +67,30 @@ feature-creator (if design is unclear)
 2. **Junior-dev solo** — clear requirements, existing patterns to follow
 3. **Lead-dev scaffold + junior-dev** — needs interface design, then mechanical implementation
 4. **Lead-dev direct** — complex/high-risk, no delegation
+
+## Project Conventions
+
+Several skills assume a few lightweight project-root conventions. None are mandatory, but skills work best when they exist:
+
+### Backlog file (`TODOS.md` / `BACKLOG.md`)
+
+A markdown file at the project root that holds work items not yet promoted to GitHub issues — small fixes, deferred refactors, follow-ups, and ideas that don't justify a full issue. Organized into priority tiers (suggested: **P1 / P2 / P3 / Deferred**), with each item being a short labeled paragraph. Resolved items can be marked with ✅ or removed.
+
+**Who reads it:**
+- `feature-flow` — Step 1c sweeps the backlog for items that could be cheaply bundled into the current issue's scope.
+- `tech-debt-analysis` — Phase 1 reads it as part of the dedup set, so audits don't re-surface known items.
+
+**Who writes it:**
+- You, manually, when capturing follow-ups during other work.
+- `tech-debt-analysis` — Phase 5 appends findings the user disposes as backlog entries.
+- The `ba` agent / `/feature-flow` Step 4a — when a reviewer finding is classified as backlog rather than a new issue.
+
+If a project tracks everything in GitHub issues and has no markdown backlog, skills will skip the corresponding scans / sweeps. Adopt the file when accumulated follow-ups start outpacing what's worth filing as issues.
+
+### Settled-decisions doc (`CLAUDE.md`)
+
+A project-root file that captures architectural principles and settled design decisions. `tech-debt-analysis` reads it (or an equivalent) to know which violations to flag (e.g. data-driven principle, extension-hook principle). The harness also auto-loads it into every session.
+
+### Handoff docs (`handoffs/`)
+
+A directory where the `architect` agent writes implementation handoff documents that `lead-dev` and `junior-dev` consume. Created on demand by the pipeline; no setup required.
