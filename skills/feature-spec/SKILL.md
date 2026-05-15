@@ -38,8 +38,10 @@ Tell the user which path you've selected and why in one sentence before starting
 ### A.1. Orient (1 short message)
 
 - State the feature-name slug you'll use.
+- **Check `FEATURE_LOG.md`** (if the project maintains one) for the feature by name (fuzzy match — handle plurals and short-forms). If found, surface its current conviction, status, and `See:` references. Ask if conviction is still accurate. If not found, note it will be added at convergence. See `/feature-log` for the registry's format and vocabulary.
 - Note any architecture docs or CLAUDE.md settled decisions that the feature obviously touches, so the user can correct misalignment early.
 - Pull relevant past work via claude-mem if useful (`mcp__plugin_claude-mem_mcp-search__memory_search` — load via ToolSearch). Don't sink time here; one targeted query, not a fishing trip.
+- **Track tangents**: throughout the interview, internally flag any named concept that surfaces and is not already in FEATURE_LOG. Do not interrupt the interview flow to log them — capture at convergence.
 
 ### A.2. Interview in three passes
 
@@ -105,9 +107,16 @@ Once Phase 3 is settled, generate the four artifacts. Do this **without further 
 
 4. **Next-iteration GitHub issue** — created the same way. Title: `<feature-name>: next iteration — <one-line description>`. Body briefly states what this iteration proves beyond the MVP, references `docs/<feature-name>/vision.md`, and explicitly notes it is **blocked on the MVP issue**. Label appropriately (e.g. `blocked`).
 
+5. **Update `FEATURE_LOG.md`** (if the project maintains one) — write or update the feature's entry: set status to `defined`, add `See:` links to the new vision and spec docs. If no entry existed, create one with the conviction level confirmed during the interview. Use the two-axis format: `[conviction | defined]`.
+
+6. **End-of-run tangent summary** — present any named concepts flagged during the interview that have no current FEATURE_LOG entry:
+   > "The following concepts surfaced during this session with no FEATURE_LOG entry: [list]. Want me to add them? I'll default conviction to `probably-need` — correct any that are wrong."
+   Write confirmed entries as `[probably-need | concept]` (or user-corrected conviction). Skip this step if no new concepts surfaced or the project does not maintain a FEATURE_LOG.
+
 After writing artifacts, report to the user:
 - The four artifact paths/URLs
 - Which tracking issue you added them to
+- FEATURE_LOG changes made (entry updated + any tangents added), if applicable
 - Any open questions that need follow-up
 
 ### A.5. Memory hygiene
@@ -122,11 +131,12 @@ Save **why** decisions were made, not **what** they are. The spec captures the w
 
 Before asking anything, do the homework. The user has explicitly said they may have forgotten what's in the docs or changed their mind, so come in fully briefed.
 
-1. Read `docs/<feature-name>/vision.md` end to end.
-2. Read the most recent spec file in `docs/<feature-name>/`. Spec files are numerically prefixed (`001-mvp-spec.md`, `002-<iteration>-spec.md`, …) — the highest-numbered file is the most recent. Read it, and skim the prior ones for evolution context if anything in the conversation hinges on history.
-3. Identify the open "next iteration" GitHub issue for this feature (search by feature-name in title, or by label). Read it.
-4. **Trust the latest spec doc as roughly correct.** Only check the code if something in the conversation suggests the doc and code diverged. If you do check code, scope to the feature's directory or wherever it lives.
-5. Pull any claude-mem memories tagged to this feature.
+1. Check `FEATURE_LOG.md` (if the project maintains one) for the entry — note conviction, status, `See:` references.
+2. Read `docs/<feature-name>/vision.md` end to end.
+3. Read the most recent spec file in `docs/<feature-name>/`. Spec files are numerically prefixed (`001-mvp-spec.md`, `002-<iteration>-spec.md`, …) — the highest-numbered file is the most recent. Read it, and skim the prior ones for evolution context if anything in the conversation hinges on history.
+4. Identify the open "next iteration" GitHub issue for this feature (search by feature-name in title, or by label). Read it.
+5. **Trust the latest spec doc as roughly correct.** Only check the code if something in the conversation suggests the doc and code diverged. If you do check code, scope to the feature's directory or wherever it lives.
+6. Pull any claude-mem memories tagged to this feature.
 
 Report back in one message:
 - 1-paragraph summary of the vision as currently written
@@ -179,7 +189,9 @@ After the interview converges, produce:
 
 5. If you **replaced** the existing next-iteration issue, close the old one with a comment explaining the pivot.
 
-Report back to the user with paths/URLs, the diff to the vision (sections updated/removed/added), and any contradictions that were surfaced but **not** resolved.
+6. **Update `FEATURE_LOG.md`** (if the project maintains one) — add the new spec doc and the next-next iteration issue to the entry's `See:` line. If status was `defined` and the iteration introduces shipped code, leave status assessment to `/feature-flow` Step 6a (which fires when the iteration's PR merges). If the vision shifted in Pass 1, ensure the entry's description still reflects the current vision.
+
+Report back to the user with paths/URLs, the diff to the vision (sections updated/removed/added), FEATURE_LOG changes (if applicable), and any contradictions that were surfaced but **not** resolved.
 
 ### B.5. Memory hygiene
 

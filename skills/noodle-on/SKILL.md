@@ -43,6 +43,17 @@ If the direction is already very clear (e.g., PM has already made key decisions,
 ### 5. Save the Noodle
 Create the markdown file in `./noodles/` using the template structure below.
 
+### 6. Update FEATURE_LOG (if the project uses one)
+
+If `FEATURE_LOG.md` exists at the repo root, update it after saving the noodle:
+
+1. For each named concept the noodle explored, search FEATURE_LOG for its entry by name (fuzzy match).
+2. If found: add the noodle file as a `See:` reference. Status stays `concept` until a vision doc exists — do not bump status.
+3. If not found for any concept: flag it in an end-of-run summary:
+   > "The following concepts surfaced in this noodle with no FEATURE_LOG entry: [list]. Want me to add them? I'll default conviction to `probably-need` — correct any that are wrong."
+   Write confirmed entries as `[probably-need | concept]` with the noodle as `Surfaced:` provenance.
+4. Skip silently if no FEATURE_LOG changes are needed, or if the project does not maintain a FEATURE_LOG. See `/feature-log` for the registry's format and vocabulary.
+
 ## File Template
 
 ```markdown

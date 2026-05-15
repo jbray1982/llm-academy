@@ -212,6 +212,19 @@ After the BA agent completes, land the change via pull request:
 
 Report the final result to the user, including the PR URL.
 
+#### Step 6a: Update FEATURE_LOG (if the project uses one)
+
+If `FEATURE_LOG.md` exists at the repo root, update it after the PR merges (or is confirmed merged):
+
+1. Find the entry for the feature this issue covers (match by title keywords or `See:` issue number).
+2. If found: assess whether the vision doc now matches the implementation.
+   - More work planned per the vision doc → set status to `partially-live`.
+   - Vision is fully implemented → set status to `live`.
+   - No vision doc exists → set status to `code-present` (do not promote to `live` without a vision doc).
+3. Add the PR number to the `See:` line.
+4. If no entry exists, create one at the appropriate status and flag to the user that conviction should be confirmed.
+5. Skip silently if the issue is purely infra/tooling with no named feature in FEATURE_LOG, or if the project does not maintain a FEATURE_LOG. See `/feature-log` for format and vocabulary.
+
 ## Label Handling
 
 Before triage, check issue labels:

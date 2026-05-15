@@ -46,6 +46,7 @@ Then customize each file for your project.
 | **feature-spec** | `/feature-spec [feature-name]` | Interview-driven feature specification — produces a vision doc, MVP spec, MVP GitHub issue, and next-iteration issue. Re-invokable on existing features for next-iteration planning with contradiction-surfacing |
 | **feature-flow** | `/feature-flow <issue-number>` | Run the full implementation pipeline for a single issue (BA triage → architect → implementation → review → PR). Worktree-aware, with a human checkpoint after triage |
 | **tech-debt-analysis** | `/tech-debt-analysis` | Architect-persona codebase audit (dead code, test gaps, pattern violations, tight coupling, parameter proliferation). Deduplicates against backlog and open issues; offers up to five findings for disposition |
+| **feature-log** | `/feature-log` | Query and navigate `FEATURE_LOG.md` — the registry of every named concept in the project's design surface (conviction × status, blocking relationships, `See:` links). Maintained automatically by `/feature-spec`, `/noodle-on`, and `/feature-flow` |
 
 ## Recommended Pipeline
 
@@ -90,6 +91,23 @@ If a project tracks everything in GitHub issues and has no markdown backlog, ski
 ### Settled-decisions doc (`CLAUDE.md`)
 
 A project-root file that captures architectural principles and settled design decisions. `tech-debt-analysis` reads it (or an equivalent) to know which violations to flag (e.g. data-driven principle, extension-hook principle). The harness also auto-loads it into every session.
+
+### Feature registry (`FEATURE_LOG.md`)
+
+A flat markdown file at the repo root listing every named feature, mechanic, or cross-cutting system that has surfaced in design conversations, tagged with **conviction** (`must-have` / `probably-need` / `cool-if`) and **status** (`concept` / `unknown` / `code-present` / `defined` / `partially-live` / `live` / `dropped` / `superseded`). An orthogonal `blocked: <name>` modifier captures dependencies. Each entry carries `See:` links to the noodles, specs, issues, and PRs that built it.
+
+It is **not** a backlog (that's `TODOS.md`), **not** an issue tracker (that's GitHub), and **not** a spec (that's `docs/<feature>/`). It answers: *what named concepts exist and where do they stand?*
+
+**Who reads it:**
+- `/feature-log` — the dedicated query interface (lookup by name, filter by status/conviction, blocking queries, dashboard).
+- `/feature-spec` — checks the entry on entry to NEW or ITERATE so the interview starts informed.
+
+**Who writes it:**
+- `/feature-spec` — creates/updates entries at convergence (status → `defined`); captures any tangent concepts mentioned during the interview.
+- `/noodle-on` — adds noodle files to relevant entries' `See:` lines; offers to add new entries for any new concepts.
+- `/feature-flow` Step 6a — promotes status to `partially-live` / `live` / `code-present` when a PR merges.
+
+If a project doesn't maintain a `FEATURE_LOG.md`, all of these hooks skip silently. Adopt the file when named-concept tracking becomes useful — typically once a few features have shipped and design exploration starts referencing prior work by name. `/feature-log` can scaffold the file on first invocation.
 
 ### Handoff docs (`handoffs/`)
 
