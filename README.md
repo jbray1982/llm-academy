@@ -112,3 +112,7 @@ If a project doesn't maintain a `FEATURE_LOG.md`, all of these hooks skip silent
 ### Handoff docs (`handoffs/`)
 
 A directory where the `architect` agent writes implementation handoff documents that `lead-dev` and `junior-dev` consume. Created on demand by the pipeline; no setup required.
+
+## License
+
+[MIT](LICENSE) — borrow freely, modify, redistribute. Attribution appreciated but not enforced beyond what the license requires.
