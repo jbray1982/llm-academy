@@ -42,6 +42,10 @@ Then customize each file for your project.
 | **noodle-on** | `/noodle-on [topic]` | Generate 2-5 structured design proposals on a topic, saved sequentially in `./noodles/` |
 | **interview-me** | `/interview-me [issue or topic]` | BA-style requirements gathering interview with the product owner |
 | **next-issue** | `/next-issue [number]` | Compact context and begin working on the next GitHub issue |
+| **ba-triage** | `/ba-triage <issue-number>` | BA readiness triage on a single issue — assess ready/deferred and recommend approach (scaffold / lead-dev / junior / needs-architect). Leaves a machine-readable footer for `/feature-flow` to reuse |
+| **feature-spec** | `/feature-spec [feature-name]` | Interview-driven feature specification — produces a vision doc, MVP spec, MVP GitHub issue, and next-iteration issue. Re-invokable on existing features for next-iteration planning with contradiction-surfacing |
+| **feature-flow** | `/feature-flow <issue-number>` | Run the full implementation pipeline for a single issue (BA triage → architect → implementation → review → PR). Worktree-aware, with a human checkpoint after triage |
+| **tech-debt-analysis** | `/tech-debt-analysis` | Architect-persona codebase audit (dead code, test gaps, pattern violations, tight coupling, parameter proliferation). Deduplicates against backlog and open issues; offers up to five findings for disposition |
 
 ## Recommended Pipeline
 
