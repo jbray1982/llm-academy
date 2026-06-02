@@ -57,6 +57,7 @@ Add or remove labels to match your project's workflow. Common additions:
 - `needs-design` — requires design doc or RFC first
 - `duplicate` — already tracked elsewhere
 - `wontfix` / `out-of-scope` — not aligned with current goals
+- `tracking` / `meta` — an umbrella, epic, or meta issue with no actionable implementation work of its own
 
 ## Triage Comment Format
 
@@ -87,7 +88,7 @@ _Tagged by `/ba-triage`._
 Footer keys:
 - `ready` — `true` or `false`
 - `approach` — one of `scaffold`, `lead-dev`, `junior`, `needs-architect`, or empty when deferred
-- `defer_label` — one of `blocked`, `needs-design`, `duplicate`, `out-of-scope`, `needs-detail`, or empty when ready
+- `defer_label` — the label that explains the deferral, or empty when ready. This is an **open enumeration** — the values below are a starting set, not a closed list. Add your project's own defer reasons (see Customization) and use whichever label you applied: `blocked`, `needs-design`, `duplicate`, `out-of-scope`, `needs-detail`, `tracking`, …
 
 If a triage comment already exists on the issue, write a new one (don't try to edit the old). The newest comment wins.
 

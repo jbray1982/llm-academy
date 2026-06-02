@@ -25,7 +25,7 @@ When the user invokes `/next-issue [number]`, compact the conversation context a
 - Check issue dependencies — look for issues whose dependencies are all closed
 - Cross-reference with tracking/epic issues to understand sequencing
 - Suggest 1-3 issues that make sense to tackle next, with a brief rationale for each
-- Ask the user which one to work on
+- Ask the user which one to work on via **AskUserQuestion** (one option per candidate, each labeled with the issue number + short title; the user can always pick "Other" to name a different issue)
 - Once the user picks one, fetch the full issue details
 
 ### 3. Begin Discussion
@@ -36,13 +36,13 @@ When the user invokes `/next-issue [number]`, compact the conversation context a
 
 ## Response Format
 
-When suggesting issues:
+When suggesting issues (prefix each with a status marker — ✅ ready / all deps closed, ⏳ has an open blocker, 🔼 unblocks other work):
 ```
 Here are candidates for the next issue:
 
-1. **#XX — Title** — [1-line rationale for why this is ready/valuable next]
-2. **#YY — Title** — [1-line rationale]
-3. **#ZZ — Title** — [1-line rationale]
+1. ✅ **#XX — Title** — [1-line rationale for why this is ready/valuable next]
+2. ⏳ **#YY — Title** — [1-line rationale, note the open blocker]
+3. 🔼 **#ZZ — Title** — [1-line rationale, note what it unblocks]
 ```
 
 When starting an issue:

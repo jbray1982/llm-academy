@@ -19,8 +19,8 @@ If no issue number is provided, ask the user which issue to work on (suggest can
 ## Pipeline Overview
 
 ```
-BA (Triage) ──checkpoint──> Architect ──> Implementation ──> Reviewer ──> BA (commit/PR/close)
-   ↑ may be reused          ↑ user approval
+BA (Triage) ──checkpoint──> Architect ──> Implementation ──> /review skill ──> BA (commit/PR/close)
+   ↑ may be reused          ↑ user approval                  ↑ foreground
    from a prior /ba-triage
 ```
 
@@ -151,20 +151,23 @@ Each implementation agent should:
 - Write the implementation
 - Run the project's build and test commands to verify
 
-### Step 4: Review (background agent)
+### Step 4: Review (`/review` skill, foreground)
 
-Launch a **reviewer** agent to check the implementation.
+Invoke the **`/review`** skill via the Skill tool. The skill runs in the foreground and: (1) spawns the `reviewer` subagent as the primary pass; (2) runs an optional adversarial cross-model pass if your project has one configured; (3) synthesizes both sources, auto-fixes trivial findings inline, and batch-asks the user about substantive ones; (4) writes `handoffs/review.md` and returns one of these verdicts on its final line:
 
-The reviewer returns one of:
 - `approved` — proceed to commit
-- `non_blocking_issues` — capture each finding (see Step 4a below), then proceed to commit
+- `non_blocking_issues` — capture each remaining finding (see Step 4a below), then proceed to commit
 - `blocking_issues` — send back for fixes (max 3 loops)
 
-**No-changes shortcut:** If `git diff --quiet HEAD` shows no changes after implementation, skip review entirely.
+**No-changes shortcut:** If `git diff --quiet origin/<default-branch>` shows no changes after implementation, skip the skill entirely and treat the verdict as `approved`. (Compare against the remote base, not `HEAD` — local commits don't count as "no changes" for a PR review.)
+
+**Why foreground:** the skill needs main-context execution for its AskUserQuestion-based fix-first loop, and it blocks the conversation for ~1–5 min when an adversarial pass runs. This is intentional — bundling fix-first and non-blocking capture into one blocking window keeps the user in a single decision flow rather than two.
+
+**Skill failure handling:** if the skill aborts (a reviewer-agent failure surfaces to the user; a missing/optional adversarial tool is handled internally by graceful skip), treat that as a `blocking_issues` verdict and stop the pipeline. Do not silently approve.
 
 #### Step 4a: Non-blocking finding capture
 
-When the reviewer returns non-blocking findings, do **not** silently create follow-up issues. For each finding, classify it and ask the user how to capture it. Use AskUserQuestion with these options:
+When `/review` returns `non_blocking_issues`, the skill has already written each remaining finding to `handoffs/review.md`. Read that file to enumerate the findings. Do **not** silently create follow-up issues. For each finding, classify it and ask the user how to capture it. Use AskUserQuestion with these options:
 
 - **`backlog`** — Append to the project's backlog file under the appropriate section with a priority tier and a "Surfaced by:" line referencing this issue. Use for small, well-scoped concerns with a clear file/symbol pointer and no design ambiguity.
 - **`issue`** — Create a GitHub issue (labeled `follow-up-issue`) referencing this issue as the source. Use for findings that need real spec work — design decisions, multi-file refactors, anything that would bloat the backlog file or needs discussion before implementation.
@@ -182,10 +185,14 @@ If the implementation changes observable behavior (new features, changed UI, mod
 
 Launch a **qa-assist** agent to produce the document. The document should include:
 - **Summary**: What changed and why (1–2 sentences)
-- **Test steps**: Numbered manual verification steps to confirm the change works
+- **Test steps**: Numbered manual verification steps for **the new behavior the diff introduced** — not a generic "make sure everything still works" sweep
 - **Expected behavior**: What the user should see at each step
-- **Edge cases**: Any boundary conditions worth checking
-- **Regression risks**: Other areas that might be affected by this change
+- **Edge cases**: Boundary conditions of the new behavior worth checking
+- **Impact notes** (only when relevant):
+  - *System/mechanic impact* — if the diff plausibly touches a load-bearing system (auth, persistence, ordering, money, a core algorithm), call out the affected system with one targeted quick-check step.
+  - *Content impact* — if the change invalidates user-authored content (hand-tuned data, assets, fixtures), flag it as a heads-up that re-authoring is needed — not a pass/fail step.
+
+Scope the steps to what the diff changed. Whether to add regression coverage for pre-existing behavior the diff doesn't touch is a project-philosophy call: early-stage / rewrite-freely projects generally shouldn't; stability-focused projects should. Follow your project's stance (and the qa-assist agent's guidance).
 
 **Skip this step** for purely internal refactors, test-only changes, tooling/skill updates, or documentation-only changes — anything where there's nothing new to observe.
 
@@ -316,4 +323,4 @@ Throughout the pipeline, keep the user informed:
 - This skill processes ONE issue at a time. For batch processing, consider a shell script wrapper that invokes this flow in headless mode for multiple issues.
 - The checkpoint after triage lets the user redirect the approach before expensive implementation work begins.
 - The BA readiness/approach check is also available standalone as `/ba-triage <number>`. When the user has already run it, this skill detects the triage comment footer and reuses the readiness result. The project backlog scope-bundling sweep always runs fresh inside `/feature-flow` because the backlog may have changed since triage.
-- All pipeline agents run in the background so the conversation stays free for discussion.
+- The BA, architect, and implementation agents run in the background so the conversation stays free for discussion. Step 4 (Review) runs **foreground** via the `/review` skill, because its synthesis and fix-first flow need AskUserQuestion in the main context.

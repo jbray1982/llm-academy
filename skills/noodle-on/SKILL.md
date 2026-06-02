@@ -158,3 +158,26 @@ Key proposals:
 - Sequential numbering preserves chronology of exploration
 - Keep proposals concrete and actionable, not abstract philosophizing
 - Focus on architectural fit within the project's established patterns
+
+## Example Interaction
+
+User invokes `/noodle-on notification-batching`.
+
+1. **Check sequence** — `./noodles/` holds up to `004-*.md`, so the new file is `005-notification-batching.md`.
+2. **Consider deeply** — the system currently sends one push per event; batching means a windowing strategy, a delivery scheduler, and an opt-out path. At least three distinct angles: fixed-interval digest, adaptive (send-on-quiet), and priority-tiered (urgent bypasses the batch).
+3. **Generate proposals** — write three, each with Description / Pros / Cons / Complexity / Dependencies / Architectural Fit.
+4. **Cross-reference** — `002-push-infrastructure.md` defined the send adapter this would reuse; link it under Related.
+5. **Save** — `./noodles/005-notification-batching.md`.
+6. **Update FEATURE_LOG** (if present) — add the noodle to the `Notifications` entry's `See:` line; flag `Digest scheduler` if it has no entry yet.
+
+Then respond:
+
+```
+Created noodle #5 on notification-batching with 3 proposals.
+Saved to: ./noodles/005-notification-batching.md
+
+Key proposals:
+1. Fixed-interval digest — simple, predictable; may delay time-sensitive alerts.
+2. Adaptive send-on-quiet — batches until the user goes idle; better timing, more state to track.
+3. Priority-tiered — urgent events bypass the batch entirely; best UX, most logic.
+```

@@ -47,6 +47,8 @@ Then customize each file for your project.
 | **feature-flow** | `/feature-flow <issue-number>` | Run the full implementation pipeline for a single issue (BA triage → architect → implementation → review → PR). Worktree-aware, with a human checkpoint after triage |
 | **tech-debt-analysis** | `/tech-debt-analysis` | Architect-persona codebase audit (dead code, test gaps, pattern violations, tight coupling, parameter proliferation). Deduplicates against backlog and open issues; offers up to five findings for disposition |
 | **feature-log** | `/feature-log` | Query and navigate `FEATURE_LOG.md` — the registry of every named concept in the project's design surface (conviction × status, blocking relationships, `See:` links). Maintained automatically by `/feature-spec`, `/noodle-on`, and `/feature-flow` |
+| **review** | `/review [base-branch]` | Pre-landing review of a branch's diff: primary `reviewer` pass + an optional cross-model adversarial pass + synthesis + fix-first (auto-fix trivial, batch-ask substantive). Writes `handoffs/review.md` and emits a verdict `/feature-flow` Step 4 consumes. Headless-safe for CI/batch use |
+| **handoff** | `/handoff [slug]` | Write a minimal `/tmp/` handoff prompt so a fresh context (post-`/clear`, or a new session for the next step) can resume the current task. Leans on the auto-loaded instructions file + any session-memory index — captures only the edge state those don't already provide |
 
 ## Recommended Pipeline
 
@@ -57,7 +59,7 @@ feature-creator (if design is unclear)
     → architect (design document)
         → lead-dev (scaffold + manifest)
             → junior-dev (implement bodies)
-                → reviewer (check implementation)
+                → /review skill (reviewer pass + optional adversarial pass + fix-first)
                     → ba (commit, close issue)
 ```
 

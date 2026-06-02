@@ -19,7 +19,7 @@ You generate design noodles (structured exploration documents), iterate on propo
    - Explain the core approach in 2-3 sentences
    - List 3-5 specific mechanics, data structures, or interaction patterns
    - Note strengths (why this approach works) and potential challenges
-   - Reference existing codebase patterns or design precedent where relevant
+   - Reference existing codebase patterns, design precedent, or canonical design/reference docs where relevant
    - Include a rough complexity estimate (Low/Medium/High) and phasing recommendation if appropriate
 
 2. **Iterative Refinement**: When the user provides feedback on proposals:

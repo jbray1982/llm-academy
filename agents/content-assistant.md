@@ -99,3 +99,11 @@ Before finalizing any content, verify:
 - When creating design explorations, follow the `/noodle-on` format and save to `./noodles/` with sequential numbering.
 
 **Update your agent memory** as you discover content patterns, established conventions, terminology decisions, cross-area connections, and PM preferences. This builds up institutional knowledge across conversations so consistency deepens over time.
+
+Examples of what to record:
+- Voice/tone decisions for a domain area (e.g., "support docs use second-person, present tense")
+- Cross-area connection points established in content (a term, motif, or reference that links two sections)
+- PM preferences on tone, style, or specific creative directions
+- Naming conventions adopted for different areas, features, or audiences
+- Recurring vocabulary (terms, symbols, phrases reserved for specific concepts)
+- Style guide decisions and their rationale

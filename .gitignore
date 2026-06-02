@@ -1,0 +1,5 @@
+# macOS
+.DS_Store
+
+# Local, non-public scratch — working docs, notes, anything not meant to publish
+.local/
