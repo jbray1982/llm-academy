@@ -6,6 +6,8 @@ user-invocable: true
 
 # Next Issue Skill
 
+> **Repo-specific guidance.** If `.llm-academy/next-issue.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
+
 When the user invokes `/next-issue [number]`, compact the conversation context and begin discussion of a new issue. If no issue number is provided, suggest one based on project status.
 
 ## Process

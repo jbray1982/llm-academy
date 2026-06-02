@@ -6,6 +6,8 @@ user-invocable: true
 
 # Handoff Skill
 
+> **Repo-specific guidance.** If `.llm-academy/handoff.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
+
 When the current context is bloated mid-task and the user wants to `/clear` and continue, or wants to spin a new context for the next logical step, this skill writes a small markdown prompt to `/tmp/` that the fresh context can read to pick up exactly where this one left off.
 
 ## Why this is minimal
