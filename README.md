@@ -13,9 +13,9 @@ Clone this repo somewhere stable, then from inside your project run the setup sc
 /path/to/llm-academy/install.sh feature-flow review    # specific slugs (+ deps)
 ```
 
-`install.sh` lets you pick which skills/agents to install, resolves their dependencies (declared via `requires:` / `requires-agents:` frontmatter), symlinks them into your `.claude/` directory (use `--copy` for a non-synced copy, e.g. on Windows without Developer Mode), and offers to scaffold the optional convention files (`TODOS.md`, `FEATURE_LOG.md`) the skills hook into. Run `install.sh --help` for all options.
+`install.sh` lets you pick which skills/agents to install, resolves their dependencies (declared via `requires:` / `requires-agents:` frontmatter), symlinks them into your `.claude/` directory (use `--copy` for a non-synced copy, e.g. on Windows without Developer Mode), and offers to scaffold the optional convention files (`TODOS.md`, `FEATURE_LOG.md`) the skills hook into. Re-running is safe and idempotent: it reports only what actually changed, so an unchanged install shows zero changes. Because the symlinks point at your local clone, the script also offers to add just those paths to your `.gitignore` (pass `--gitignore` to do it without prompting) rather than ignoring all of `.claude/` — keeping any tracked files like `settings.local.json` under version control. Run `install.sh --help` for all options.
 
-Then, from your project, run the **`learn-repo`** skill. It reads your codebase and writes the `.llm-academy/` overlays — a shared `repo.md` profile (language, build/test commands, layout, conventions) plus per-skill guidance where a skill needs specifics. **Commit `.llm-academy/`** (it is team knowledge); leave the `.claude/` symlinks out of version control (they point at each developer's local clone).
+Then, from your project, run the **`learn-repo`** skill. It reads your codebase and writes the `.llm-academy/` overlays — a shared `repo.md` profile (language, build/test commands, layout, conventions) plus per-skill guidance where a skill needs specifics. **Commit `.llm-academy/`** (it is team knowledge); leave the installed `.claude/` symlinks out of version control (they point at each developer's local clone — the `--gitignore` step above handles exactly those paths).
 
 The adoption flow is: **clone → `install.sh` → `learn-repo`.**
 
