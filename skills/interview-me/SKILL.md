@@ -6,6 +6,8 @@ user-invocable: true
 
 # Interview Me Skill
 
+> **Repo-specific guidance.** If `.llm-academy/interview-me.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
+
 When the user invokes `/interview-me [issue number or topic]`, you become a **business analyst** gathering requirements from the user, who is the **product owner**. The goal is to leave the conversation with enough detail to write a solid implementation plan.
 
 ## Starting Assumptions

@@ -2,18 +2,28 @@
 
 This folder contains **generic, project-agnostic** agent and skill definitions for use with [Claude Code](https://claude.ai/code). They define a structured software development pipeline where specialized agents handle different phases of work.
 
-These are **templates** meant to be refined for your specific project. Before using them, have your LLM review and refine each definition for your specific codebase, tech stack, domain terminology, and workflow preferences. The placeholders (`[your project]`, `[your domain]`, etc.) should be replaced with concrete details, and project-specific conventions (test frameworks, build commands, folder structures) should be filled in.
+These definitions stay **generic on purpose**. Instead of forking and hand-editing them per project (which immediately drifts from upstream), you **install them as symlinks** and layer your project's specifics into a separate `.llm-academy/` overlay directory that each definition references but never contains. Customization becomes data, not a fork: a `git pull` in this clone propagates improvements to every repo that installed from it, and your overlays are left untouched.
 
 ## Installation
 
-Copy the contents into your project's `.claude/` directory:
+Clone this repo somewhere stable, then from inside your project run the setup script:
 
 ```bash
-cp -r agents/ /path/to/your/project/.claude/agents/
-cp -r skills/ /path/to/your/project/.claude/skills/
+/path/to/llm-academy/install.sh                        # interactive selector
+/path/to/llm-academy/install.sh feature-flow review    # specific slugs (+ deps)
 ```
 
-Then customize each file for your project.
+`install.sh` lets you pick which skills/agents to install, resolves their dependencies (declared via `requires:` / `requires-agents:` frontmatter), symlinks them into your `.claude/` directory (use `--copy` for a non-synced copy, e.g. on Windows without Developer Mode), and offers to scaffold the optional convention files (`TODOS.md`, `FEATURE_LOG.md`) the skills hook into. Run `install.sh --help` for all options.
+
+Then, from your project, run the **`learn-repo`** skill. It reads your codebase and writes the `.llm-academy/` overlays — a shared `repo.md` profile (language, build/test commands, layout, conventions) plus per-skill guidance where a skill needs specifics. **Commit `.llm-academy/`** (it is team knowledge); leave the `.claude/` symlinks out of version control (they point at each developer's local clone).
+
+The adoption flow is: **clone → `install.sh` → `learn-repo`.**
+
+### How customization works
+
+Every skill and agent carries a footer like *"if `.llm-academy/<slug>.md` exists, read it first."* When the overlay is present it overrides the generic guidance for your project; when absent, the definition behaves generically. You never edit a canonical file, so upstream and local stay cleanly separated.
+
+> **Legacy path (manual fork).** You can still `cp -r agents/ skills/` into `.claude/` and hand-edit the placeholders (`[your project]`, build commands, etc.) directly. It works, but it drifts from upstream — prefer the install + overlay flow above.
 
 ## Agents
 
@@ -49,6 +59,7 @@ Then customize each file for your project.
 | **feature-log** | `/feature-log` | Query and navigate `FEATURE_LOG.md` — the registry of every named concept in the project's design surface (conviction × status, blocking relationships, `See:` links). Maintained automatically by `/feature-spec`, `/noodle-on`, and `/feature-flow` |
 | **review** | `/review [base-branch]` | Pre-landing review of a branch's diff: primary `reviewer` pass + an optional cross-model adversarial pass + synthesis + fix-first (auto-fix trivial, batch-ask substantive). Writes `handoffs/review.md` and emits a verdict `/feature-flow` Step 4 consumes. Headless-safe for CI/batch use |
 | **handoff** | `/handoff [slug]` | Write a minimal `/tmp/` handoff prompt so a fresh context (post-`/clear`, or a new session for the next step) can resume the current task. Leans on the auto-loaded instructions file + any session-memory index — captures only the edge state those don't already provide |
+| **learn-repo** | `/learn-repo` | Read the repo and write its `.llm-academy/` overlay files — a shared `repo.md` profile plus per-skill guidance — so installed skills/agents customize to the project without being forked. The semantic half of adoption; pairs with the `install.sh` setup script |
 
 ## Recommended Pipeline
 

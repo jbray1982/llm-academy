@@ -2,9 +2,12 @@
 name: review
 description: Pre-landing review of a branch's diff against base. Runs a primary pass through the reviewer subagent, an optional adversarial cross-model pass, synthesizes findings, auto-fixes trivial nits, batch-asks the user about substantive ones, and writes `handoffs/review.md` with a verdict the pipeline consumes.
 user-invocable: true
+requires-agents: [reviewer]
 ---
 
 # Review Skill
+
+> **Repo-specific guidance.** If `.llm-academy/review.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
 
 Pre-landing review for [your project]. Designed to be called by `/feature-flow` (Step 4) and also invokable directly (`/review`) on any branch.
 

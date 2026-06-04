@@ -2,9 +2,12 @@
 name: feature-spec
 description: Interview-driven feature specification. Produces a vision doc, an MVP spec, an MVP GitHub issue, and a next-iteration GitHub issue. Re-invokable on an existing feature to plan the next iteration with contradiction-surfacing.
 user-invocable: true
+requires-agents: [feature-creator]
 ---
 
 # Feature Spec Skill
+
+> **Repo-specific guidance.** If `.llm-academy/feature-spec.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
 
 When the user invokes `/feature-spec [feature-name or topic]`, run a structured interview using the **feature-creator** agent's persona and operating principles (`.claude/agents/feature-creator.md`). The skill has two distinct paths — **NEW** (no prior docs) and **ITERATE** (vision doc + next-step issue already exist).
 

@@ -6,6 +6,8 @@ user-invocable: true
 
 # Noodle On Skill
 
+> **Repo-specific guidance.** If `.llm-academy/noodle-on.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
+
 When the user invokes `/noodle-on [topic]`, generate thoughtful proposals and considerations about that aspect of the product, saved as a sequentially numbered markdown file.
 
 ## Process

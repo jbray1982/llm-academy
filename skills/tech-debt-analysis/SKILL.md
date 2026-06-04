@@ -6,6 +6,8 @@ user-invocable: true
 
 # Tech Debt Analysis Skill
 
+> **Repo-specific guidance.** If `.llm-academy/tech-debt-analysis.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
+
 When the user invokes `/tech-debt-analysis`, adopt the **architect persona** and run a structured audit of the codebase. The goal is to surface actionable tech debt — not minor style nits — and help the user decide what to do with each finding.
 
 Stop and present findings after **five net-new items** are identified. Never pile up a long list; five is the session limit. The user can re-invoke to continue.

@@ -2,9 +2,12 @@
 name: ba-triage
 description: BA triage on a single GitHub issue — assess readiness, recommend fast-track vs. architect, and record the result on the issue
 user-invocable: true
+requires-agents: [ba]
 ---
 
 # BA Triage Skill
+
+> **Repo-specific guidance.** If `.llm-academy/ba-triage.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
 
 When the user invokes `/ba-triage <issue-number>`, run the BA readiness/approach triage from the issue implementation pipeline on a single issue. This is the readiness portion of `/feature-flow`'s Step 1, broken out so it can be run on its own (for backlog grooming, batch prep, or to pre-stage an issue before later running `/feature-flow` on it).
 

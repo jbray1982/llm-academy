@@ -6,6 +6,8 @@ user-invocable: true
 
 # /feature-log skill
 
+> **Repo-specific guidance.** If `.llm-academy/feature-log.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
+
 Query and navigate `FEATURE_LOG.md` — the registry of every named concept in the project's design surface.
 
 ## What FEATURE_LOG is

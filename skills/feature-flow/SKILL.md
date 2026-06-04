@@ -2,9 +2,13 @@
 name: feature-flow
 description: Run the full issue implementation pipeline (BA triage, architect, implementation, review, commit) for a single GitHub issue
 user-invocable: true
+requires: [review, ba-triage]
+requires-agents: [ba, architect, lead-dev, junior-dev, qa-assist]
 ---
 
 # Feature Flow Skill
+
+> **Repo-specific guidance.** If `.llm-academy/feature-flow.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
 
 When the user invokes `/feature-flow <issue-number>`, run the full implementation pipeline for that issue. This is an interactive, single-issue version of a batch processing pipeline with a human checkpoint after triage.
 
