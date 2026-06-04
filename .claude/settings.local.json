@@ -6,7 +6,10 @@
       "Bash(git commit:*)",
       "Bash(git branch:*)",
       "Bash(git remote add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git symbolic-ref *)",
+      "Bash(gh issue *)",
+      "Bash(gh pr *)"
     ]
   }
 }

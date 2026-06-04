@@ -3,3 +3,24 @@
 
 # Local, non-public scratch — working docs, notes, anything not meant to publish
 .local/
+
+# llm-academy symlinks — they point at a local clone, not for version control
+.claude/skills/ba-triage
+.claude/skills/feature-flow
+.claude/skills/feature-log
+.claude/skills/feature-spec
+.claude/skills/handoff
+.claude/skills/interview-me
+.claude/skills/learn-repo
+.claude/skills/next-issue
+.claude/skills/noodle-on
+.claude/skills/review
+.claude/skills/tech-debt-analysis
+.claude/agents/architect.md
+.claude/agents/ba.md
+.claude/agents/content-assistant.md
+.claude/agents/feature-creator.md
+.claude/agents/junior-dev.md
+.claude/agents/lead-dev.md
+.claude/agents/qa-assist.md
+.claude/agents/reviewer.md
