@@ -20,8 +20,10 @@
 #                     when symlinks are unavailable).
 #   --with-deps       Auto-include resolved dependencies without prompting.
 #   --scaffold        Create missing convention-file stubs without prompting.
+#   --gitignore       Add the installed symlink paths to the target's .gitignore
+#                     without prompting (skipped if .claude/ is already ignored).
 #   -y, --yes         Assume "yes" to all prompts (implies --with-deps,
-#                     --scaffold).
+#                     --scaffold, --gitignore).
 #   -h, --help        Show this help.
 #
 set -euo pipefail
@@ -42,10 +44,11 @@ TARGET="$(pwd)"
 USE_COPY=0
 WITH_DEPS=0
 SCAFFOLD=0
+GITIGNORE=0
 ASSUME_YES=0
 SELECTED_ARGS=()
 
-usage() { sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -54,7 +57,8 @@ while [ $# -gt 0 ]; do
     --copy) USE_COPY=1; shift ;;
     --with-deps) WITH_DEPS=1; shift ;;
     --scaffold) SCAFFOLD=1; shift ;;
-    -y|--yes) ASSUME_YES=1; WITH_DEPS=1; SCAFFOLD=1; shift ;;
+    --gitignore) GITIGNORE=1; shift ;;
+    -y|--yes) ASSUME_YES=1; WITH_DEPS=1; SCAFFOLD=1; GITIGNORE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "Unknown option: $1" >&2; usage; exit 2 ;;
     *) SELECTED_ARGS+=("$1"); shift ;;
@@ -195,32 +199,89 @@ fi
 # ----------------------------------------------------------------------------
 mkdir -p "$TARGET/.claude/skills" "$TARGET/.claude/agents"
 
-link_or_copy() { # $1 src  $2 dest
-  local src="$1" dest="$2"
+# Tallies reflect *actual changes*, not the resolved selection: items that are
+# already linked or that we leave untouched (pre-existing non-symlink) don't
+# count. LINKED_PATHS collects the symlinks we own, for the .gitignore step.
+declare -a LINKED_PATHS=()
+CHANGED_SKILLS=0 CHANGED_AGENTS=0 ALREADY=0 SKIPPED=0
+
+link_or_copy() { # $1 src  $2 dest  $3 kind (skill|agent)
+  local src="$1" dest="$2" kind="$3"
+  local rel="${dest#"$TARGET"/}"
   if [ -L "$dest" ]; then
-    if [ "$USE_COPY" -eq 0 ] && [ "$(readlink "$dest")" = "$src" ]; then echo "  = $dest (already linked)"; return; fi
+    if [ "$USE_COPY" -eq 0 ] && [ "$(readlink "$dest")" = "$src" ]; then
+      echo "  = $dest (already linked)"; LINKED_PATHS+=("$rel"); ALREADY=$((ALREADY+1)); return
+    fi
     rm -rf "$dest"
   elif [ -e "$dest" ]; then
-    echo "  ! $dest exists and is not an llm-academy symlink — leaving it alone." >&2; return
+    echo "  ! $dest exists and is not an llm-academy symlink — leaving it alone." >&2
+    SKIPPED=$((SKIPPED+1)); return
   fi
   if [ "$USE_COPY" -eq 1 ]; then
     cp -R "$src" "$dest"; echo "  + $dest (copied)"
   elif ln -s "$src" "$dest" 2>/dev/null; then
-    echo "  + $dest -> $src"
+    echo "  + $dest -> $src"; LINKED_PATHS+=("$rel")
   else
     cp -R "$src" "$dest"; echo "  + $dest (copied — symlink unavailable)"
   fi
+  if [ "$kind" = skill ]; then CHANGED_SKILLS=$((CHANGED_SKILLS+1)); else CHANGED_AGENTS=$((CHANGED_AGENTS+1)); fi
 }
 
 echo "Installing into $TARGET/.claude ..."
 for s in "${RES_SKILLS[@]}"; do
   [ -n "$s" ] || continue
-  link_or_copy "$SOURCE/skills/$s" "$TARGET/.claude/skills/$s"
+  link_or_copy "$SOURCE/skills/$s" "$TARGET/.claude/skills/$s" skill
 done
 for a in "${RES_AGENTS[@]:-}"; do
   [ -n "$a" ] || continue
-  link_or_copy "$SOURCE/agents/$a.md" "$TARGET/.claude/agents/$a.md"
+  link_or_copy "$SOURCE/agents/$a.md" "$TARGET/.claude/agents/$a.md" agent
 done
+
+# ----------------------------------------------------------------------------
+# .gitignore — offer to ignore just the symlinked paths (not all of .claude/)
+# ----------------------------------------------------------------------------
+maybe_gitignore() {
+  # Only symlinks need ignoring; --copy installs real files the repo may vendor.
+  [ "${#LINKED_PATHS[@]}" -gt 0 ] || return 0
+  local gi="$TARGET/.gitignore"
+
+  # If the repo already ignores .claude/ wholesale, per-path lines are noise.
+  if [ -f "$gi" ] && grep -qE '^[[:space:]]*\.claude/?\*?[[:space:]]*$' "$gi"; then
+    echo "  = $gi already ignores .claude/ — not adding per-symlink entries."
+    return 0
+  fi
+
+  # Skip paths that are already listed verbatim (keeps re-runs idempotent).
+  local -a to_add=() p
+  for p in "${LINKED_PATHS[@]}"; do
+    if [ -f "$gi" ] && grep -qxF "$p" "$gi"; then continue; fi
+    to_add+=("$p")
+  done
+  [ "${#to_add[@]}" -gt 0 ] || return 0
+
+  local do_it="$GITIGNORE"
+  if [ "$do_it" -eq 0 ]; then
+    [ "$HEADLESS" -eq 1 ] && return 0  # don't touch .gitignore unprompted in headless
+    echo "These ${#to_add[@]} symlink(s) point at your llm-academy clone, so they usually"
+    echo "should not be committed (unlike anything else you keep in .claude/)."
+    printf "Add them to %s? [Y/n] " "$gi"; read -r r
+    case "$r" in [Nn]*) return 0 ;; *) do_it=1 ;; esac
+  fi
+  [ "$do_it" -eq 1 ] || return 0
+
+  if [ -f "$gi" ] && [ -s "$gi" ]; then
+    [ -n "$(tail -c1 "$gi")" ] && echo "" >> "$gi"   # ensure trailing newline
+    echo "" >> "$gi"                                  # blank separator
+  fi
+  {
+    echo "# llm-academy symlinks — they point at a local clone, not for version control"
+    printf '%s\n' "${to_add[@]}"
+  } >> "$gi"
+  echo "  + $gi (+${#to_add[@]} llm-academy symlink path(s))"
+}
+
+echo "Checking .gitignore ..."
+maybe_gitignore
 
 # ----------------------------------------------------------------------------
 # Convention-file stubs
@@ -267,13 +328,17 @@ maybe_scaffold "FEATURE_LOG.md" "$FEATURE_LOG_STUB"
 # ----------------------------------------------------------------------------
 # Done
 # ----------------------------------------------------------------------------
+echo ""
+echo "Done. Installed ${CHANGED_SKILLS} skill(s) and ${CHANGED_AGENTS} agent(s)."
+[ "$ALREADY" -gt 0 ] && echo "  (${ALREADY} already up to date.)"
+[ "$SKIPPED" -gt 0 ] && echo "  (${SKIPPED} left untouched — pre-existing, not an llm-academy symlink.)"
+
 cat <<EOF
 
-Done. Installed ${#RES_SKILLS[@]} skill(s) and ${#RES_AGENTS[@]} agent(s).
-
 Next: run the \`learn-repo\` skill to write this repo's \`.llm-academy/\` overlays
-(a shared repo.md profile plus per-skill guidance). Commit \`.llm-academy/\`;
-leave the \`.claude/\` symlinks out of version control (they point at your local
-clone). Re-run this script anytime to add more, and \`git pull\` in $SOURCE to
-take upstream updates.
+(a shared repo.md profile plus per-skill guidance). Commit \`.llm-academy/\`.
+The symlinked skills/agents point at your local clone, so keep them out of
+version control — this script offered to add just those paths to \`.gitignore\`
+(rather than ignoring all of \`.claude/\`, which you may want to commit). Re-run
+this script anytime to add more, and \`git pull\` in $SOURCE to take updates.
 EOF
