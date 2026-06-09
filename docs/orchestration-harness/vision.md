@@ -66,6 +66,15 @@ underlying LLM CLI is a config concern, not a rewrite.
 - **Telemetry capture.** Every stage attempt appends a structured record (run id,
   item, stage, backend, attempt, status, verify results, failure reason, timestamps)
   to a per-run telemetry log. Capture-only in the MVP — written to be analyzed later.
+- **Optional documentation stage.** An optional, gated `document` stage runs after
+  `review` and before `commit`, driven by the `documentarian` agent. It reconciles what
+  shipped against the design/spec and propagates the delta to outward-facing surfaces
+  (README, CHANGELOG, reference docs), leaving a one-line *as-built* note on the spec
+  where behavior diverged. It is **gated on source changes** — diffs that touch no source
+  (docs-only, config-only, test-only) make it a no-op — so it costs nothing on the many
+  runs that don't move a public contract. Off in the minimal preset; opt-in via config.
+  The set of documented surfaces and what counts as "source" is repo-specific
+  (overlay/config), not baked into the stage.
 - **Backend seam.** The headless LLM invocation sits behind a single backend module
   (`run_stage(prompt, schema, tools) → result`). The MVP ships one implementation
   (`claude -p`), but the boundary is clean enough that a second backend (`codex`,
