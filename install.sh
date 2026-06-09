@@ -20,7 +20,8 @@
 #                     when symlinks are unavailable).
 #   --with-deps       Auto-include resolved dependencies without prompting.
 #   --scaffold        Create missing convention-file stubs without prompting.
-#   --gitignore       Add the installed symlink paths to the target's .gitignore
+#   --gitignore       Add llm-academy-managed paths (symlinks + pipeline handoffs/)
+#                     to the target's .gitignore
 #                     without prompting (skipped if .claude/ is already ignored).
 #   -y, --yes         Assume "yes" to all prompts (implies --with-deps,
 #                     --scaffold, --gitignore).
@@ -280,8 +281,54 @@ maybe_gitignore() {
   echo "  + $gi (+${#to_add[@]} llm-academy symlink path(s))"
 }
 
+# Components that generate handoffs/ at runtime (architect/lead-dev/reviewer designs
+# and reviewer findings). When any is installed, the repo accumulates ephemeral,
+# regenerated-per-run handoff files that should not be committed — ignore them up front
+# so no consuming repo has to rediscover that.
+HANDOFF_SKILLS=" feature-flow review "
+HANDOFF_AGENTS=" architect lead-dev reviewer "
+
+installs_handoff_producer() {
+  local x
+  for x in "${RES_SKILLS[@]:-}"; do
+    [ -n "$x" ] || continue
+    case "$HANDOFF_SKILLS" in *" $x "*) return 0 ;; esac
+  done
+  for x in "${RES_AGENTS[@]:-}"; do
+    [ -n "$x" ] || continue
+    case "$HANDOFF_AGENTS" in *" $x "*) return 0 ;; esac
+  done
+  return 1
+}
+
+maybe_gitignore_handoffs() {
+  installs_handoff_producer || return 0
+  local gi="$TARGET/.gitignore" entry="handoffs/"
+  if [ -f "$gi" ] && grep -qxF "$entry" "$gi"; then return 0; fi   # idempotent
+
+  local do_it="$GITIGNORE"
+  if [ "$do_it" -eq 0 ]; then
+    [ "$HEADLESS" -eq 1 ] && return 0   # don't touch .gitignore unprompted in headless
+    echo "The pipeline writes per-run agent handoffs to $entry (regenerated each run)."
+    printf "Ignore %s in %s? [Y/n] " "$entry" "$gi"; read -r r
+    case "$r" in [Nn]*) return 0 ;; *) do_it=1 ;; esac
+  fi
+  [ "$do_it" -eq 1 ] || return 0
+
+  if [ -f "$gi" ] && [ -s "$gi" ]; then
+    [ -n "$(tail -c1 "$gi")" ] && echo "" >> "$gi"   # ensure trailing newline
+    echo "" >> "$gi"                                  # blank separator
+  fi
+  {
+    echo "# llm-academy pipeline handoffs — regenerated per run, not for version control"
+    echo "$entry"
+  } >> "$gi"
+  echo "  + $gi (handoffs/)"
+}
+
 echo "Checking .gitignore ..."
 maybe_gitignore
+maybe_gitignore_handoffs
 
 # ----------------------------------------------------------------------------
 # Convention-file stubs
