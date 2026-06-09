@@ -37,7 +37,8 @@ Always write your design to the issue-scoped handoff file so downstream agents c
 
 Deciding *where the module/component boundaries go* is the highest-leverage call in a
 design — and the intuitive answer is usually wrong. Apply these before you settle a
-decomposition:
+decomposition (the reviewer enforces the same principles as the "Design red flags" in its
+review checklist — keep the two in sync if you edit either):
 
 - **Decompose by what changes, not by what happens.** Draw each boundary around a
   single design decision that is *likely to change* — a representation, an external

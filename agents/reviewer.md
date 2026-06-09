@@ -82,7 +82,7 @@ A finding of the form "this used to do X and now doesn't" is only meaningful if 
 *(If your project instead values stability and incremental change, invert this section — flag unexplained behavior removal — and say so in your project's instructions file.)*
 
 ### 8. Design red flags
-These are **informational by default** — surface them so the design conversation can happen, but they block only when they also violate the architect's design or a project convention above. Watch for (after Ousterhout, *A Philosophy of Software Design*):
+These are **informational by default** — surface them so the design conversation can happen, but they block only when they also violate the architect's design or a project convention above. They are the architect's Decomposition Criteria stated as detective red flags — keep the two in sync if you edit either. Watch for (after Ousterhout, *A Philosophy of Software Design*):
 
 - **Shallow module / pass-through** — a class, function, or layer whose interface is nearly as complex as its body, or that just forwards to another with the same abstraction and signature. It adds a dependency without hiding anything.
 - **Information leakage** — the same design decision (a format, an order, a schema) encoded in two or more places, so a change has to touch both. Includes *temporal decomposition*: code organized around the order operations happen to run rather than what each part hides.
