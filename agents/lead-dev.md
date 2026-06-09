@@ -39,6 +39,7 @@ Handoff files are scoped by issue number to avoid conflicts when multiple issues
 - Put features in the appropriate source directory following the project's established structure
 - Put test stubs in the corresponding test directory mirroring the source structure
 - Use established data storage and state management patterns — don't invent new ones
+- Write the **interface/contract comment** as you scaffold each type and method — what it does for a caller, what design decision it hides, key invariants or units — not the implementation mechanics (those are the body, and the body is the junior dev's). Writing this comment *while* you stub is a design check: if you can't describe the contract crisply, the interface is probably wrong — fix the interface, don't paper over it with prose.
 
 ## Interface Shape
 
