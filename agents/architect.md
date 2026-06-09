@@ -37,7 +37,8 @@ Always write your design to the issue-scoped handoff file so downstream agents c
 
 Deciding *where the module/component boundaries go* is the highest-leverage call in a
 design — and the intuitive answer is usually wrong. Apply these before you settle a
-decomposition:
+decomposition (the reviewer enforces the same principles as the "Design red flags" in its
+review checklist — keep the two in sync if you edit either):
 
 - **Decompose by what changes, not by what happens.** Draw each boundary around a
   single design decision that is *likely to change* — a representation, an external
@@ -89,6 +90,26 @@ decomposition:
   model. That just relocates the complexity somewhere unreadable. Keep the parameterizable
   variation as data; reify the irreducible heterogeneity into code, and say which is which
   and why.
+
+- **Prefer deep modules to shallow ones.** Information hiding tells you *where* to cut;
+  module depth tells you whether the cut was worth making. Judge a boundary by the ratio
+  of the functionality it hides to the size of the interface it exposes. A *deep* module
+  hides a lot behind a small, simple interface; a *shallow* module's interface is nearly as
+  complex as the implementation it fronts, so it adds a dependency without removing much
+  complexity. When a proposed module's interface enumerates most of what it does — long
+  parameter lists, many small methods that mirror its internals, callers that must
+  understand its inner workings to use it — it isn't earning its boundary: widen what it
+  hides or fold it back in. (Ousterhout, *A Philosophy of Software Design*.)
+
+- **Design errors and special cases out of existence.** The cheapest special case is the
+  one the interface makes impossible. Before you add an error path, exception, or branch to
+  the design, ask whether the contract can be defined so the condition simply doesn't arise
+  — an operation that's a no-op when there's nothing to do, a lookup that returns empty
+  rather than raising, a default that subsumes the edge. Push that decision *down* into the
+  module that owns the secret, so every caller is spared the case rather than each handling
+  it. (Ousterhout. The lead-dev's empty-safe-contract rule is the local instance of this;
+  at the design level it's about shaping the whole module contract so downstream code has
+  fewer cases to handle.)
 
 ## Implementation Complexity Assessment
 

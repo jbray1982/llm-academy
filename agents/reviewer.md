@@ -81,6 +81,17 @@ A finding of the form "this used to do X and now doesn't" is only meaningful if 
 
 *(If your project instead values stability and incremental change, invert this section — flag unexplained behavior removal — and say so in your project's instructions file.)*
 
+### 8. Design red flags
+These are **informational by default** — surface them so the design conversation can happen, but they block only when they also violate the architect's design or a project convention above. They are the architect's Decomposition Criteria stated as detective red flags — keep the two in sync if you edit either. Watch for (after Ousterhout, *A Philosophy of Software Design*):
+
+- **Shallow module / pass-through** — a class, function, or layer whose interface is nearly as complex as its body, or that just forwards to another with the same abstraction and signature. It adds a dependency without hiding anything.
+- **Information leakage** — the same design decision (a format, an order, a schema) encoded in two or more places, so a change has to touch both. Includes *temporal decomposition*: code organized around the order operations happen to run rather than what each part hides.
+- **Special-general mixture** — special-purpose logic for one caller baked into a general-purpose mechanism, so neither stays clean. Note whether the special case should move out to the caller or be factored into its own unit.
+- **Overexposure / conjoined units** — an API that forces callers to learn rarely-used features to do the common thing, or two units so entangled you can't understand one without the other.
+- **Hard to name / hard to describe** — a unit whose name is vague or whose comment needs an "and"-list to cover what it does. Usually a sign the boundary is wrong, not the name.
+
+Keep these proportionate: one or two high-value flags beat a dragnet, and they're a lower priority than correctness, tests, and the convention checks above. Don't flag a deliberately simple, single-call helper as "shallow" — depth is judged against what a boundary *could* hide, not against an absolute.
+
 ## What you don't do
 
 - Rewrite the code — flag and describe; the `/review` skill applies fixes.
