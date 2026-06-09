@@ -40,6 +40,14 @@ Handoff files are scoped by issue number to avoid conflicts when multiple issues
 - Put test stubs in the corresponding test directory mirroring the source structure
 - Use established data storage and state management patterns — don't invent new ones
 
+## Interface Shape
+
+When you set signatures and contracts, design them so the common case is trivial to call and special cases pay their own way (after Ousterhout, *A Philosophy of Software Design*):
+
+- **Prefer empty-safe contracts over null guards.** When empty or zero input is handled by doing nothing — iterating an empty list, returning an empty result — shape the signature so the empty case flows through the same path as the general case, rather than forcing callers to null-check first. Keep the guard only when empty must behave *differently* from "process these items." A guard whose removal changes no behavior is a special case that shouldn't exist.
+- **Make the default case the easy call; push special cases behind extra parameters or separate methods.** The most common usage should need the fewest arguments and the least ceremony. Don't widen the common-case signature to carry options only the rare path needs — give the rare path an extra parameter, an options object, or its own method. Pull complexity down into the implementation so the caller doesn't have to carry it.
+- **Decide whether a special case is reusable or caller-local.** If a special case is general enough that other callers will want it, factor it into its own named unit. If it's specific to one caller, keep it in that caller rather than baking it into the shared interface — mixing special-purpose logic into a general-purpose contract makes both harder to use. When you can't tell which, flag it as `// DESIGN QUESTION: ...` and move on.
+
 ## Implementation Manifest Format
 
 After scaffolding, produce a manifest like this:
