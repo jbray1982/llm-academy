@@ -3,7 +3,7 @@ name: feature-flow
 description: Run the full issue implementation pipeline (BA triage, architect, implementation, review, commit) for a single GitHub issue
 user-invocable: true
 requires: [review, ba-triage]
-requires-agents: [ba, architect, lead-dev, junior-dev, qa-assist]
+requires-agents: [ba, architect, lead-dev, junior-dev, qa-assist, documentarian]
 ---
 
 # Feature Flow Skill
@@ -23,8 +23,8 @@ If no issue number is provided, ask the user which issue to work on (suggest can
 ## Pipeline Overview
 
 ```
-BA (Triage) ──checkpoint──> Architect ──> Implementation ──> /review skill ──> BA (commit/PR/close)
-   ↑ may be reused          ↑ user approval                  ↑ foreground
+BA (Triage) ──checkpoint──> Architect ──> Implementation ──> /review skill ──> [Docs*] ──> BA (commit/PR/close)
+   ↑ may be reused          ↑ user approval                  ↑ foreground       ↑ *only if source changed
    from a prior /ba-triage
 ```
 
@@ -200,7 +200,23 @@ Scope the steps to what the diff changed. Whether to add regression coverage for
 
 **Skip this step** for purely internal refactors, test-only changes, tooling/skill updates, or documentation-only changes — anything where there's nothing new to observe.
 
-### Step 6: BA Cleanup (background agent)
+### Step 6: Documentation (optional — gated on source changes)
+
+If the implementation changed **source code**, run the documentarian to keep outward-facing docs honest about what shipped. This stage is gated — it does real work only when the diff touches source.
+
+**Gate (cheap pre-check):** look at `git diff origin/<default-branch> --stat`. If the change is obviously docs-only, config-only, or test-only, **skip this step**. Otherwise launch the documentarian — it self-gates against the project's precise source globs (from its overlay) and no-ops if it concludes no documented surface is affected.
+
+Launch a **documentarian** agent in the background. It will:
+- Reconcile design intent (the feature's spec doc + `handoffs/design-{issue}.md`) against what actually shipped (`git diff origin/<default-branch>`).
+- Update the outward-facing surfaces the change affects — README/usage, CHANGELOG/release notes, reference docs — sourced from intent + diff, not by paraphrasing the code.
+- Leave a one-line *as-built* note on the spec (or the FEATURE_LOG entry) wherever shipped behavior diverged from the plan.
+- Write edits directly into files on the feature branch (it does **not** commit) and report which surfaces it touched.
+
+The doc edits are committed together with the code by Step 7 (BA Cleanup) — there is no separate docs PR. If the documentarian reports it couldn't source a change's rationale from the design/spec, surface that gap rather than letting it invent prose.
+
+**Skip this step** when the gate above says no source changed, or when the project maintains no documented surfaces (no overlay and no README/CHANGELOG) — there's nothing to propagate to.
+
+### Step 7: BA Cleanup (background agent)
 
 Launch a **ba** agent to:
 1. Stage and commit changes with an appropriate message (include `Co-Authored-By` attribution per the project's convention)
@@ -223,7 +239,7 @@ After the BA agent completes, land the change via pull request:
 
 Report the final result to the user, including the PR URL.
 
-#### Step 6a: Update FEATURE_LOG (if the project uses one)
+#### Step 7a: Update FEATURE_LOG (if the project uses one)
 
 If `FEATURE_LOG.md` exists at the repo root, update it after the PR merges (or is confirmed merged):
 
