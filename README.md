@@ -61,6 +61,25 @@ Every skill and agent carries a footer like *"if `.llm-academy/<slug>.md` exists
 | **handoff** | `/handoff [slug]` | Write a minimal `/tmp/` handoff prompt so a fresh context (post-`/clear`, or a new session for the next step) can resume the current task. Leans on the auto-loaded instructions file + any session-memory index — captures only the edge state those don't already provide |
 | **learn-repo** | `/learn-repo` | Read the repo and write its `.llm-academy/` overlay files — a shared `repo.md` profile plus per-skill guidance — so installed skills/agents customize to the project without being forked. The semantic half of adoption; pairs with the `install.sh` setup script |
 
+## Harness (headless pipeline runner)
+
+`harness/` is a headless single-work-item pipeline runner that executes the
+feature-flow stages (triage → architect → implement → review → commit) as
+declarative YAML config rows through one generic executor loop. It is the
+machine-readable companion to `/feature-flow`: same stages, same agents, no
+interactive prompts.
+
+```bash
+harness/run.sh <issue-number> [--config <path>]
+```
+
+Exit codes: `0` completed · `75` deferred (retry later) · `1` aborted · `2` config error.
+
+- [`harness/README.md`](harness/README.md) — invocation, exit codes, per-repo override model, telemetry, installation
+- [`harness/config/README.md`](harness/config/README.md) — full configuration reference: stage fields, predicate forms, approach enum, facts store, path resolution
+
+---
+
 ## Recommended Pipeline
 
 For most features, the pipeline flows:

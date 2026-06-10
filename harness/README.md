@@ -30,7 +30,9 @@ harness/run.sh <item> [--config <path>]
 
 ## Config schema
 
-See `config/default.yaml` for the annotated feature-flow preset. Key fields:
+See [`config/README.md`](config/README.md) for the full configuration reference
+(all stage fields, predicate forms, approach enum, path resolution rules).
+`config/default.yaml` is the annotated feature-flow preset. Key fields:
 
 ```yaml
 backend: claude           # LLM backend; only 'claude' is implemented
