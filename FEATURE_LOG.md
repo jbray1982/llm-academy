@@ -9,5 +9,11 @@ Format: `- **[conviction | status]** **Name** — one-line description.`
 - **[must-have | defined]** **Orchestration Harness** — generic headless single-work-item pipeline runner ("feature-flow, headless + configurable + instrumented + pluggable"); generalizes sunken-spires' inner batch-process pipeline.
   Surfaced: feature-spec session, 2026-06-08. See: docs/orchestration-harness/vision.md, docs/orchestration-harness/001-mvp-spec.md, #11.
 
+- **[must-have | defined]** **Pipeline Stress Corpus** — library of graded, cross-domain stress-test cases for the orchestration harness; each case pairs real-feeling payload artifacts with a two-axis rubric (pipeline behavior + product correctness) so harness changes can be regression-tested empirically.
+  Surfaced: feature-spec session, 2026-06-10. See: docs/pipeline-stress-corpus/vision.md, docs/pipeline-stress-corpus/001-mvp-spec.md.
+
+- **[probably-need | defined]** **Harness Telemetry Report** — read-only CLI (`harness/report.sh`) aggregating the harness's JSONL telemetry into per-stage/per-item summaries with text/json/md output; first consumer of the pinned telemetry schema. The reader the harness MVP deferred.
+  Surfaced: feature-spec session, 2026-06-10. See: docs/harness-telemetry-report/vision.md, docs/harness-telemetry-report/001-mvp-spec.md.
+
 - **[must-have | partially-live]** **Verification Plugin System** — formal verifier plugin architecture for the harness. Ships in two iterations: the existing LLM judge migrated as the first plugin (behavior-preserving refactor that defines and validates the contract, #15 — shipped in PR #17), then TVR (traceability verification via embeddings + batched LLM judgment per requirement, #16) as the second plugin and the framework-generalization proof; TVR catches "we built the wrong thing" misses that the holistic judge doesn't. Inspired by arXiv 2504.15427. Vision amended 2026-06-09: plugin discovery moves from pure-filesystem to a declared manifest/registry to support multi-developer plugin contribution.
   Surfaced: feature-spec session, 2026-06-09; restructured judge-first 2026-06-09. See: docs/verification-plugin/vision.md, docs/verification-plugin/001-mvp-spec.md, docs/verification-plugin/002-tvr-spec.md, #15, #16, PR #17.
