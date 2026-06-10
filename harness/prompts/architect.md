@@ -4,10 +4,11 @@ Act as architect: Review issue #{item}.
 {{handoff:triage}}
 
 Recommend one approach:
-- 'scaffold': Complex, needs lead-dev to scaffold interfaces + junior-dev to implement
-- 'lead-dev': Too complex for junior-dev, lead-dev should implement directly
-- 'junior': Simple enough for junior-dev to implement directly
-- 'direct': Architect will implement directly
+- 'scaffold': Lead-dev scaffolds interfaces and a manifest; junior-dev implements all stubs.
+- 'scaffold-lead': Lead-dev scaffolds interfaces and implements the complex/high-risk parts; junior-dev fills the remaining simpler stubs. Use when some bodies have non-obvious invariants or cross-cutting concerns that junior-dev should not own, but most of the work is mechanical enough to delegate.
+- 'lead-dev': Too complex for junior-dev and no scaffolding phase needed; lead-dev implements everything directly.
+- 'junior': Simple enough for junior-dev to implement directly from the issue description.
+- 'direct': Architect implements directly (experimental or architectural spike).
 - 'decision-required': User-facing functionality ambiguity exists, requires human decision (not just code organization). This includes gameplay, UI/UX, content tooling, or any product-level choice.
 
 If you make a product decision that should be reviewed:

@@ -134,6 +134,9 @@ result_eval_predicate() {
   # Normalise absent fact to the string "null" for comparison.
   [ -z "$actual_val" ] && actual_val="null"
 
+  local negate
+  negate="$(printf '%s' "$predicate_json" | yq '.negate // false' 2>/dev/null)" || true
+
   # Check for "in" array predicate.
   local in_array
   in_array="$(printf '%s' "$predicate_json" | yq '.in // ""' -o=json 2>/dev/null)" || true
@@ -143,18 +146,13 @@ result_eval_predicate() {
     local match
     match="$(printf '%s' "$in_array" | yq ".[] | select(. == \"$actual_val\")" 2>/dev/null)" || true
     if [ -n "$match" ]; then
-      return 0
+      [ "$negate" = "true" ] && return 1 || return 0
     else
-      return 1
+      [ "$negate" = "true" ] && return 0 || return 1
     fi
   fi
 
   # Equals predicate.
-  local equals_val
-  equals_val="$(printf '%s' "$predicate_json" | yq '.equals // "null"' -o=json 2>/dev/null | tr -d '"')" || true
-
-  local negate
-  negate="$(printf '%s' "$predicate_json" | yq '.negate // false' 2>/dev/null)" || true
 
   local matches=1  # default: no match
   if [ "$actual_val" = "$equals_val" ]; then

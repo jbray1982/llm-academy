@@ -3,8 +3,8 @@
   "properties": {
     "approach": {
       "type": "string",
-      "enum": ["scaffold", "lead-dev", "junior", "direct", "decision-required"],
-      "description": "Implementation approach recommendation."
+      "enum": ["scaffold", "scaffold-lead", "lead-dev", "junior", "direct", "decision-required"],
+      "description": "Implementation approach recommendation. Use 'scaffold-lead' when lead-dev should scaffold interfaces AND implement the complex/high-risk parts before junior fills remaining stubs."
     },
     "reasoning": {
       "type": "string",

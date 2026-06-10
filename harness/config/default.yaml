@@ -82,7 +82,7 @@ stages:
 
   # ---------------------------------------------------------------------------
   # scaffold-lead — Lead-dev scaffolds interfaces, stubs, manifest.
-  # skip_when: approach != scaffold.
+  # skip_when: approach not in [scaffold, scaffold-lead].
   # ---------------------------------------------------------------------------
   - name: scaffold-lead
     prompt: prompts/scaffold-lead.md
@@ -97,12 +97,14 @@ stages:
     skip_when:
       field: approach
       negate: true
-      equals: "scaffold"
+      in:
+        - "scaffold"
+        - "scaffold-lead"
     on_fail: abort
 
   # ---------------------------------------------------------------------------
   # scaffold-junior — Junior-dev implements scaffolded stubs.
-  # skip_when: approach != scaffold.
+  # skip_when: approach not in [scaffold, scaffold-lead].
   # consumes: scaffold-lead handoff (injected via {{handoff:scaffold-lead}}).
   # ---------------------------------------------------------------------------
   - name: scaffold-junior
@@ -117,12 +119,17 @@ stages:
     skip_when:
       field: approach
       negate: true
-      equals: "scaffold"
+      in:
+        - "scaffold"
+        - "scaffold-lead"
     on_fail: abort
 
   # ---------------------------------------------------------------------------
-  # implement-lead — Lead-dev implements directly (too complex for junior).
-  # skip_when: approach != lead-dev.
+  # implement-lead — Lead-dev implements complex parts.
+  # skip_when: approach not in [lead-dev, scaffold-lead].
+  # For lead-dev: implements everything from architect handoff.
+  # For scaffold-lead: implements only the complex/high-risk parts flagged in
+  #   the scaffold-lead manifest; junior already filled the simpler stubs.
   # ---------------------------------------------------------------------------
   - name: implement-lead
     prompt: prompts/implement-lead.md
@@ -133,10 +140,13 @@ stages:
       - "Bash(gh issue view {item}*)"
     consumes:
       - architect
+      - scaffold-lead
     skip_when:
       field: approach
       negate: true
-      equals: "lead-dev"
+      in:
+        - "lead-dev"
+        - "scaffold-lead"
     on_fail: abort
 
   # ---------------------------------------------------------------------------
