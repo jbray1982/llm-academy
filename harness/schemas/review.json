@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["approved", "blocking_issues", "non_blocking_issues"],
+      "description": "Review verdict. 'approved' or 'non_blocking_issues' allows pipeline to continue; 'blocking_issues' triggers the retry/fix loop."
+    },
+    "feedback": {
+      "type": "string",
+      "description": "Description of any issues found. Used by the fix stage and by the BA to create follow-up issues."
+    }
+  },
+  "required": ["status", "feedback"]
+}

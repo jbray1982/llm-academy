@@ -1,6 +1,6 @@
 ---
 name: review
-description: Pre-landing review of a branch's diff against base. Runs a primary pass through the reviewer subagent, an optional adversarial cross-model pass, synthesizes findings, auto-fixes trivial nits, batch-asks the user about substantive ones, and writes `handoffs/review.md` with a verdict the pipeline consumes.
+description: Pre-landing review of a branch's diff against base. Runs a primary pass through the reviewer subagent, an optional adversarial cross-model pass, synthesizes findings, auto-fixes trivial nits, batch-asks the user about substantive ones, and writes `handoffs/review-{issue}.md` with a verdict the pipeline consumes.
 user-invocable: true
 requires-agents: [reviewer]
 ---
@@ -26,12 +26,12 @@ The skill does NOT commit, push, or open PRs — that is the pipeline's commit s
 detect diff → read handoffs → primary pass (reviewer agent)
             → adversarial pass (optional; skip if not configured) → synthesize
             → fix-first (auto-fix trivial, batch-ask substantive)
-            → write handoffs/review.md → return verdict
+            → write handoffs/review-{issue}.md → return verdict
 ```
 
 ## Verdict contract
 
-The skill's final output (and `handoffs/review.md`'s "Status" line) MUST resolve to exactly one of:
+The skill's final output (and `handoffs/review-{issue}.md`'s "Status" line) MUST resolve to exactly one of:
 
 - `approved` — no remaining issues; safe to land
 - `non_blocking_issues` — issues found but caller can proceed; each finding is captured in the findings list with severity / file / fix
@@ -53,7 +53,11 @@ HEADLESS=0
 [ -n "$CLAUDE_HEADLESS" ] && HEADLESS=1
 [ -n "$CI" ] && HEADLESS=1
 [ -n "$BATCH_PROCESSOR" ] && HEADLESS=1
-echo "BASE=$BASE  DIFF_TOTAL=$DIFF_TOTAL  HEADLESS=$HEADLESS"
+# Detect issue number from branch name (e.g. feature/issue-42 → 42).
+# Falls back to "unknown" when the branch doesn't follow the convention.
+ISSUE=$(git branch --show-current 2>/dev/null | grep -oE '[0-9]+$' || echo "unknown")
+REVIEW_FILE="handoffs/review-${ISSUE}.md"
+echo "BASE=$BASE  DIFF_TOTAL=$DIFF_TOTAL  HEADLESS=$HEADLESS  REVIEW_FILE=$REVIEW_FILE"
 ```
 
 **Headless detection rules** (be defensive — these signals stack):
@@ -64,7 +68,7 @@ echo "BASE=$BASE  DIFF_TOTAL=$DIFF_TOTAL  HEADLESS=$HEADLESS"
 
 If any of the above is true, treat HEADLESS=1 for the rest of the skill. **In headless mode you MUST NOT call AskUserQuestion** — it will silently fail and the skill will hang or proceed with wrong state.
 
-**No-diff shortcut**: if `git diff --quiet "$BASE"` returns 0, the branch has no changes against base. Write a minimal `handoffs/review.md` (Status: approved, "no changes detected") and stop. Do not run the reviewer or adversarial pass.
+**No-diff shortcut**: if `git diff --quiet "$BASE"` returns 0, the branch has no changes against base. Write a minimal `handoffs/review-{issue}.md` (Status: approved, "no changes detected") and stop. Do not run the reviewer or adversarial pass.
 
 Print a one-line summary: `Reviewing <N> lines against <base>.`
 
@@ -86,14 +90,14 @@ The agent's prompt must include:
 
 1. The base branch name (so it runs `git diff <base>` correctly)
 2. Whether the design and manifest handoffs are present
-3. Instruction to write its findings to `handoffs/review.md` in the standard format (see Step 6 below)
+3. Instruction to write its findings to `handoffs/review-{issue}.md` in the standard format (see Step 6 below)
 4. Instruction to return a final-line verdict in the format `VERDICT: <approved|non_blocking_issues|blocking_issues>` followed by a JSON findings array on the next line
 
 **Run foreground** (no `run_in_background`). The skill must have the reviewer's output before proceeding to synthesis.
 
 **Failure handling**:
 - *Interactive*: if the reviewer agent fails or returns no parseable verdict, surface the failure to the user via AskUserQuestion (retry / abort / treat as blocking). Do not silently approve.
-- *Headless*: same failure → write a minimal `handoffs/review.md` with `Status: blocking_issues` and a finding `reviewer agent failed` (include stderr/last-message excerpt). Return `VERDICT: blocking_issues`. Never silently approve in headless.
+- *Headless*: same failure → write a minimal `handoffs/review-{issue}.md` with `Status: blocking_issues` and a finding `reviewer agent failed` (include stderr/last-message excerpt). Return `VERDICT: blocking_issues`. Never silently approve in headless.
 
 ---
 
@@ -171,7 +175,7 @@ If there are zero ASK items after auto-fix, skip Step 5b — go straight to Step
 - Each option must include enough context for the user to decide without re-reading the diff: file + line + one-sentence problem + one-sentence proposed fix.
 
 **Headless mode (HEADLESS=1):**
-- Do NOT call AskUserQuestion. Treat every ASK item as deferred — record it in `handoffs/review.md` with `Status: deferred-headless` and do not apply the fix.
+- Do NOT call AskUserQuestion. Treat every ASK item as deferred — record it in `handoffs/review-{issue}.md` with `Status: deferred-headless` and do not apply the fix.
 - Verdict resolution still works: any CRITICAL ASK item still surfaces as `blocking_issues`, non-critical ASK items become `non_blocking_issues`. The caller (batch processor, automation) gets a clear signal in the verdict + findings JSON and can act on it however it wants.
 - Print one line summarizing what was deferred: `Headless mode: deferred N ASK items (X critical, Y informational).`
 
@@ -183,9 +187,9 @@ For each ASK item the user chose to fix, apply the fix using Edit. Skipped items
 
 ---
 
-## Step 6: Write `handoffs/review.md`
+## Step 6: Write `handoffs/review-{issue}.md`
 
-Overwrite `handoffs/review.md` (not append — the pipeline expects one current review per branch). Format:
+Use `$REVIEW_FILE` (set in Step 0) as the path — e.g. `handoffs/review-42.md`. Latest-wins per issue: overwrite any prior review for this issue number. Git history preserves earlier rounds. Format:
 
 ```markdown
 # Review: <branch or issue ref>
@@ -262,4 +266,4 @@ CLAUDE_HEADLESS=1 claude -p "/review origin/main" \
   --allowedTools "Read,Write,Edit,Bash,Agent"
 ```
 
-The skill returns its findings via the final `handoffs/review.md` file and the `VERDICT:` line in stdout. Parse the verdict to branch your script. AskUserQuestion does not need to be in `--allowedTools` — the skill detects its absence and routes to the deferred-finding path.
+The skill returns its findings via the final `handoffs/review-{issue}.md` file and the `VERDICT:` line in stdout. Parse the verdict to branch your script. AskUserQuestion does not need to be in `--allowedTools` — the skill detects its absence and routes to the deferred-finding path.

@@ -204,7 +204,7 @@ mkdir -p "$TARGET/.claude/skills" "$TARGET/.claude/agents"
 # already linked or that we leave untouched (pre-existing non-symlink) don't
 # count. LINKED_PATHS collects the symlinks we own, for the .gitignore step.
 declare -a LINKED_PATHS=()
-CHANGED_SKILLS=0 CHANGED_AGENTS=0 ALREADY=0 SKIPPED=0
+CHANGED_SKILLS=0 CHANGED_AGENTS=0 CHANGED_HARNESS=0 ALREADY=0 SKIPPED=0
 
 link_or_copy() { # $1 src  $2 dest  $3 kind (skill|agent)
   local src="$1" dest="$2" kind="$3"
@@ -237,6 +237,49 @@ for a in "${RES_AGENTS[@]:-}"; do
   [ -n "$a" ] || continue
   link_or_copy "$SOURCE/agents/$a.md" "$TARGET/.claude/agents/$a.md" agent
 done
+
+# ----------------------------------------------------------------------------
+# Harness — new installable artifact kind (CLAUDE.md §Adding files).
+#
+# harness/ is a top-level directory, not a skill or agent, so the skill/agent
+# globs above do not reach it. It is symlinked wholesale into the consuming
+# repo's root (not under .claude/) so `harness/run.sh <item>` is invocable
+# from the repo root without path gymnastics.
+#
+# Per-repo customization is NOT done by editing the symlinked files — use a
+# repo-local config (e.g. .harness/config.yaml) passed via --config, and place
+# override prompt files next to that config. The path-resolution fallback in
+# harness/lib/config.sh inherits canonical prompts automatically.
+#
+# install.ps1 does not exist yet; harness/ is Linux/macOS only for now.
+# ----------------------------------------------------------------------------
+install_harness() {
+  local src="$SOURCE/harness"
+  local dest="$TARGET/harness"
+  [ -d "$src" ] || return 0   # no harness in this llm-academy clone — skip silently
+
+  local rel="${dest#"$TARGET"/}"
+  if [ -L "$dest" ]; then
+    if [ "$USE_COPY" -eq 0 ] && [ "$(readlink "$dest")" = "$src" ]; then
+      echo "  = $dest (already linked)"; LINKED_PATHS+=("$rel"); ALREADY=$((ALREADY+1)); return
+    fi
+    rm -rf "$dest"
+  elif [ -e "$dest" ]; then
+    echo "  ! $dest exists and is not an llm-academy symlink — leaving it alone." >&2
+    SKIPPED=$((SKIPPED+1)); return
+  fi
+
+  if [ "$USE_COPY" -eq 1 ]; then
+    cp -R "$src" "$dest"; echo "  + $dest (copied)"; CHANGED_HARNESS=$((CHANGED_HARNESS+1))
+  elif ln -s "$src" "$dest" 2>/dev/null; then
+    echo "  + $dest -> $src"; LINKED_PATHS+=("$rel"); CHANGED_HARNESS=$((CHANGED_HARNESS+1))
+  else
+    cp -R "$src" "$dest"; echo "  + $dest (copied — symlink unavailable)"; CHANGED_HARNESS=$((CHANGED_HARNESS+1))
+  fi
+}
+
+echo "Installing harness ..."
+install_harness
 
 # ----------------------------------------------------------------------------
 # .gitignore — offer to ignore just the symlinked paths (not all of .claude/)
@@ -376,7 +419,7 @@ maybe_scaffold "FEATURE_LOG.md" "$FEATURE_LOG_STUB"
 # Done
 # ----------------------------------------------------------------------------
 echo ""
-echo "Done. Installed ${CHANGED_SKILLS} skill(s) and ${CHANGED_AGENTS} agent(s)."
+echo "Done. Installed ${CHANGED_SKILLS} skill(s), ${CHANGED_AGENTS} agent(s), and ${CHANGED_HARNESS} harness."
 [ "$ALREADY" -gt 0 ] && echo "  (${ALREADY} already up to date.)"
 [ "$SKIPPED" -gt 0 ] && echo "  (${SKIPPED} left untouched — pre-existing, not an llm-academy symlink.)"
 

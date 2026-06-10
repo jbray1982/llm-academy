@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "approach": {
+      "type": "string",
+      "enum": ["scaffold", "scaffold-lead", "lead-dev", "junior", "direct", "decision-required"],
+      "description": "Implementation approach recommendation. Use 'scaffold-lead' when lead-dev should scaffold interfaces AND implement the complex/high-risk parts before junior fills remaining stubs."
+    },
+    "reasoning": {
+      "type": "string",
+      "description": "Detailed explanation of the approach decision."
+    },
+    "requires_product_review": {
+      "type": "boolean",
+      "description": "True if a product decision was made that should be reviewed in a follow-up issue."
+    },
+    "review_issue_title": {
+      "type": "string",
+      "description": "Title for the product review follow-up issue, if requires_product_review is true."
+    },
+    "review_issue_body": {
+      "type": "string",
+      "description": "Body for the product review follow-up issue, if requires_product_review is true."
+    }
+  },
+  "required": ["approach", "reasoning"]
+}
