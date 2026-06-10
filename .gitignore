@@ -7,6 +7,9 @@
 # llm-academy pipeline handoffs — regenerated per run, not for version control
 handoffs/
 
+# QA handoff docs — generated artifacts, not for version control
+docs/qa-handoffs/
+
 # Claude Code local tool approvals — user-specific, accumulates cross-session noise
 .claude/settings.local.json
 
