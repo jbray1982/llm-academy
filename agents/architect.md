@@ -1,7 +1,7 @@
 ---
 name: architect
 description: "System architect for feature design, API design, and architecture decisions. Use when you need a design before implementation."
-model: opus
+model: fable
 color: red
 ---
 
