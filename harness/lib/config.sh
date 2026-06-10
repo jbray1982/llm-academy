@@ -39,6 +39,12 @@ config_load() {
     return 2
   fi
 
+  # Check jq is installed
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "error: jq is required. Install: https://stedolan.github.io/jq/" >&2
+    return 2
+  fi
+
   # Check path exists and is readable
   if [ ! -f "$path" ] || [ ! -r "$path" ]; then
     echo "error: config file not found or not readable: $path" >&2
@@ -120,6 +126,38 @@ config_load() {
     fi
   done
 
+  # Preflight plugin keys: for each stage's verify: block, every key other than
+  # "checks" must have a corresponding lib/plugins/<key>.sh in the harness or
+  # config directory. An unresolvable plugin key is a config error — fail fast.
+  local j
+  for ((j = 0; j < stage_count; j++)); do
+    local verify_block
+    verify_block="$(yq ".stages[$j].verify" "$_CONFIG_PATH" -o=json 2>/dev/null)" || true
+    if [ -z "$verify_block" ] || [ "$verify_block" = "null" ]; then
+      continue
+    fi
+
+    local plugin_keys_in_verify
+    plugin_keys_in_verify="$(printf '%s' "$verify_block" | jq -r 'keys[]' 2>/dev/null)" || true
+
+    local pk
+    while IFS= read -r pk; do
+      [ -z "$pk" ] && continue
+      [ "$pk" = "checks" ] && continue
+
+      # Config-dir override first, then harness install — matches runtime resolution order.
+      if [ -n "$_CONFIG_DIR" ] && [ -f "$_CONFIG_DIR/lib/plugins/${pk}.sh" ]; then
+        continue
+      fi
+      if [ -f "$_HARNESS_DIR/lib/plugins/${pk}.sh" ]; then
+        continue
+      fi
+
+      echo "error: no plugin found for verify key '$pk' in stage $j (checked $_HARNESS_DIR/lib/plugins/ and $_CONFIG_DIR/lib/plugins/)" >&2
+      return 2
+    done <<< "$plugin_keys_in_verify"
+  done
+
   return 0
 }
 
@@ -164,6 +202,9 @@ config_stage_field() {
   else
     # Stage level — handle nested paths
     case "$key" in
+      verify)
+        yq_path=".stages[$stage_index].verify"
+        ;;
       verify_checks)
         yq_path=".stages[$stage_index].verify.checks"
         ;;
@@ -185,7 +226,7 @@ config_stage_field() {
   # Determine if this field needs JSON output mode
   local use_json=false
   case "$key" in
-    skip_when|terminal_when|gate|verify_judge|tools|consumes|verify_checks|recover_tools)
+    skip_when|terminal_when|gate|verify|verify_judge|tools|consumes|verify_checks|recover_tools)
       use_json=true
       ;;
   esac

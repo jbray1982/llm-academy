@@ -1,40 +1,44 @@
 #!/usr/bin/env bash
-# lib/verify.sh — M7: Stage verification (checks + optional LLM judge).
+# lib/verify.sh — M7: Stage verification (checks + generic plugin dispatch).
 #
-# Secret owned: how deterministic checks and an LLM judge compose into a
+# Secret owned: how deterministic checks and plugin verdicts compose into a
 # single pass/fail verdict. This is the one module that is irreducibly code
 # rather than config — the composition logic cannot be expressed as data.
 #
 # Verdict JSON schema emitted to stdout:
 #   {
 #     "passed": true|false,
-#     "checks": [{"command":"...","exit_code":0},...],
-#     "judge_verdict": "pass"|"fail"|null,
-#     "judge_reason": "...",
+#     "checks": [{"command": "...", "exit_code": 0}, ...],
+#     "plugins": {
+#       "<plugin_name>": {"passed": true|false, "verdict": "pass"|"fail", "reason": "..."}
+#     },
+#     "warnings": [],
 #     "failure_reason": "human-readable summary when passed=false"
 #   }
 #
-# Pass rule: ALL checks exit 0 AND (no judge configured OR judge returns "pass").
-# A judge that fails to return a structured verdict is a verify FAILURE —
-# never a silent pass. This prevents a broken judge from allowing bad code through.
+# Pass rule: ALL checks exit 0 AND every plugin reported passed=true.
+# A plugin that fails to return a structured verdict is a verify FAILURE —
+# never a silent pass. This prevents a broken plugin from allowing bad code through.
+#
+# Built-in phase: "checks" is handled directly here and never dispatched to a plugin.
+# Plugin phase: every other key in verify: {...} maps to lib/plugins/<key>.sh.
+# An unknown key (no plugin file) fails the stage with reason "plugin not found: <key>".
 
 # ---------------------------------------------------------------------------
 # verify_stage  stage_record_dir  run_dir  item  co_author  →  verdict JSON on stdout
 #
 # contract: Runs the verification policy for one stage attempt.
 #   stage_record_dir is a directory containing the stage's config fields as
-#   individual text files (one per field: checks, judge, schema, backend, name).
-#   Reads checks as a JSON array of shell command strings; runs each in order.
-#   A non-zero exit from any check sets passed=false.
-#   If a judge is configured (reads from stage_record_dir/judge as a JSON object
-#   with prompt, criteria, schema fields): calls prompt_assemble + backend_invoke
-#   + result_extract_field to get the judge verdict. A judge that cannot return
-#   a structured {"verdict":"pass"|"fail"} is treated as failure.
+#   individual text files. Reads stage_record_dir/verify as the full verify:
+#   block JSON object. The "checks" key is handled as a built-in (JSON array of
+#   shell command strings). Every other key dispatches to lib/plugins/<key>.sh,
+#   which receives (stage_record_dir, run_dir, item, co_author) and emits
+#   {"passed":bool,"verdict":"pass"|"fail","reason":"..."} on stdout.
 #   Always emits valid verdict JSON — callers must not parse stderr.
 #
 #   DESIGN QUESTION: should {item} substitution be applied to check commands
 #   (so checks can include issue-number-specific gh commands)? Assumed yes,
-#   but prompt_assemble is not called for checks — a simple sed substitution
+#   but prompt_assemble is not called for checks — a simple string substitution
 #   is used instead. Revisit if richer template grammar is needed in checks.
 # ---------------------------------------------------------------------------
 verify_stage() {
@@ -47,34 +51,23 @@ verify_stage() {
   HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   # shellcheck source=/dev/null
   source "$HARNESS_DIR/lib/result.sh"
-  # shellcheck source=/dev/null
-  source "$HARNESS_DIR/lib/prompt.sh"
-  # shellcheck source=/dev/null
-  source "$HARNESS_DIR/lib/backend.sh"
-
-  # Explicit temp file tracking — no EXIT trap to avoid overwriting executor's trap.
-  # Both files are created only in the judge phase; we clean them up before returning.
-  local _verify_prompt_file="" _verify_result_file=""
-  _verify_cleanup() {
-    rm -f "${_verify_prompt_file:-}" "${_verify_result_file:-}" 2>/dev/null || true
-  }
 
   # Initialize verdict tracking
   local checks_passed=true
-  local judge_passed=true
-  local judge_verdict="null"
-  local judge_reason=""
+  local checks_failed_count=0
   local -a checks_array=()
-  local failure_reason=""
+  local -A plugin_verdicts=()
+  local -a failed_sources=()
 
-  # Phase 1: Check phase
+  # -------------------------------------------------------------------------
+  # Phase 1: Checks (built-in — never dispatched to a plugin).
+  # -------------------------------------------------------------------------
   local checks_json=""
   if [ -f "$stage_record_dir/checks" ]; then
     checks_json="$(cat "$stage_record_dir/checks")"
   fi
 
   if [ -n "$checks_json" ] && [ "$checks_json" != "null" ]; then
-    # Iterate through checks array
     local check_count
     check_count="$(printf '%s' "$checks_json" | yq 'length' 2>/dev/null)" || true
 
@@ -100,116 +93,120 @@ verify_stage() {
         check_obj="$(jq -n --arg cmd "$cmd" --arg code "$exit_code" '{command: $cmd, exit_code: ($code | tonumber)}')"
         checks_array+=("$check_obj")
 
-        # Mark passed=false if non-zero
         if [ "$exit_code" -ne 0 ]; then
           checks_passed=false
+          checks_failed_count=$((checks_failed_count + 1))
         fi
       fi
     done
   fi
 
-  # Phase 2: Judge phase
-  local judge_json=""
-  if [ -f "$stage_record_dir/judge" ]; then
-    judge_json="$(cat "$stage_record_dir/judge")"
+  if ! $checks_passed; then
+    local total_count="${#checks_array[@]}"
+    failed_sources+=("checks: $checks_failed_count of $total_count failed")
   fi
 
-  if [ -n "$judge_json" ] && [ "$judge_json" != "null" ]; then
-    # Extract judge fields
-    local judge_prompt
-    judge_prompt="$(printf '%s' "$judge_json" | yq '.prompt' 2>/dev/null)" || true
-    judge_prompt="${judge_prompt#\"}"
-    judge_prompt="${judge_prompt%\"}"
+  # -------------------------------------------------------------------------
+  # Phase 2: Plugin dispatch.
+  # For each key in stage_record_dir/verify that is not "checks", locate and
+  # invoke the corresponding lib/plugins/<key>.sh.
+  # -------------------------------------------------------------------------
+  local verify_json=""
+  if [ -f "$stage_record_dir/verify" ]; then
+    verify_json="$(cat "$stage_record_dir/verify")"
+  fi
 
-    local judge_schema
-    judge_schema="$(printf '%s' "$judge_json" | yq '.schema' 2>/dev/null)" || true
-    judge_schema="${judge_schema#\"}"
-    judge_schema="${judge_schema%\"}"
+  if [ -n "$verify_json" ] && [ "$verify_json" != "null" ] && [ "$verify_json" != "{}" ]; then
+    # Enumerate all keys in the verify block.
+    local plugin_keys
+    plugin_keys="$(printf '%s' "$verify_json" | jq -r 'keys[]' 2>/dev/null)" || true
 
-    if [ -n "$judge_prompt" ] && [ "$judge_prompt" != "null" ]; then
-      # Resolve relative judge paths: config-dir override first, harness install fallback.
-      # _HARNESS_DIR is set by config.sh (loaded before any stage runs).
+    while IFS= read -r plugin_key; do
+      [ -z "$plugin_key" ] && continue
+      # "checks" is the built-in — skip it here.
+      [ "$plugin_key" = "checks" ] && continue
+
+      # Write the key's JSON value to stage_record_dir/<key> for the plugin.
+      local plugin_config
+      plugin_config="$(printf '%s' "$verify_json" | jq -c --arg k "$plugin_key" '.[$k]' 2>/dev/null)" || true
+      printf '%s' "${plugin_config:-null}" > "$stage_record_dir/$plugin_key"
+
+      # Locate plugin: config-dir override first, then harness install.
+      local plugin_path=""
       local _h="${_HARNESS_DIR:-$HARNESS_DIR}"
       local _cd="${_CONFIG_DIR:-}"
-      if [ -n "$_cd" ] && [ -f "$_cd/$judge_prompt" ]; then
-        judge_prompt="$_cd/$judge_prompt"
-      elif [ -f "$_h/prompts/$(basename "$judge_prompt")" ]; then
-        judge_prompt="$_h/prompts/$(basename "$judge_prompt")"
-      fi
-      if [ -n "$judge_schema" ] && [ "$judge_schema" != "null" ]; then
-        if [ -n "$_cd" ] && [ -f "$_cd/$judge_schema" ]; then
-          judge_schema="$_cd/$judge_schema"
-        elif [ -f "$_h/schemas/$(basename "$judge_schema")" ]; then
-          judge_schema="$_h/schemas/$(basename "$judge_schema")"
-        fi
+
+      if [ -n "$_cd" ] && [ -f "$_cd/lib/plugins/${plugin_key}.sh" ]; then
+        plugin_path="$_cd/lib/plugins/${plugin_key}.sh"
+      elif [ -f "$_h/lib/plugins/${plugin_key}.sh" ]; then
+        plugin_path="$_h/lib/plugins/${plugin_key}.sh"
       fi
 
-      # Assemble judge prompt
-      _verify_prompt_file="$(mktemp "/tmp/harness-verify-XXXXXX")"
+      if [ -z "$plugin_path" ]; then
+        # No plugin found — fail the stage with a named reason.
+        plugin_verdicts["$plugin_key"]='{"passed":false,"verdict":"fail","reason":"plugin not found: '"$plugin_key"'"}'
+        failed_sources+=("$plugin_key: plugin not found")
+        continue
+      fi
 
-      if prompt_assemble "$judge_prompt" "$item" "$run_dir" "$co_author" > "$_verify_prompt_file"; then
-        # Get backend from stage record
-        local backend
-        backend="$(cat "$stage_record_dir/backend" 2>/dev/null)" || true
-        backend="${backend:-claude}"
+      # Invoke the plugin; capture stdout as verdict JSON.
+      local raw_verdict=""
+      local plugin_exit=0
+      raw_verdict="$("$plugin_path" "$stage_record_dir" "$run_dir" "$item" "$co_author" 2>/dev/null)" \
+        || plugin_exit=$?
 
-        # Invoke backend
-        _verify_result_file="$(mktemp "/tmp/harness-verify-XXXXXX")"
+      # Validate the plugin's output is parseable JSON with a "passed" field.
+      local verdict_passed=""
+      verdict_passed="$(printf '%s' "$raw_verdict" | jq -r '.passed // empty' 2>/dev/null)" || true
 
-        if backend_invoke "$backend" "$_verify_prompt_file" "$judge_schema" "" > "$_verify_result_file" 2>/dev/null; then
-          local envelope_json
-          envelope_json="$(cat "$judge_result_file")"
+      if [ -z "$verdict_passed" ]; then
+        # Plugin exited or returned JSON without a boolean 'passed' field.
+        plugin_verdicts["$plugin_key"]='{"passed":false,"verdict":"fail","reason":"plugin did not return a valid verdict"}'
+        failed_sources+=("$plugin_key: plugin did not return a valid verdict")
+        continue
+      fi
 
-          # Normalize and extract verdict
-          local structured
-          structured="$(result_normalize "$envelope_json")"
+      # Store the plugin's own verdict (may be a fail verdict the plugin itself produced).
+      plugin_verdicts["$plugin_key"]="$raw_verdict"
 
-          judge_verdict="$(result_extract_field "$structured" "verdict")" || true
-          judge_reason="$(result_extract_field "$structured" "reason")" || true
+      if [ "$verdict_passed" != "true" ]; then
+        local plugin_reason=""
+        plugin_reason="$(printf '%s' "$raw_verdict" | jq -r '.reason // ""' 2>/dev/null)" || true
+        failed_sources+=("$plugin_key: ${plugin_reason:-failed}")
+      fi
 
-          # Validate verdict
-          if [ "$judge_verdict" != "pass" ] && [ "$judge_verdict" != "fail" ]; then
-            judge_verdict="fail"
-            judge_reason="judge did not return a structured verdict"
-            judge_passed=false
-          else
-            judge_passed=$([ "$judge_verdict" = "pass" ] && printf 'true' || printf 'false')
-          fi
-        else
-          # Judge invocation failed
-          judge_verdict="fail"
-          judge_reason="judge invocation failed"
-          judge_passed=false
-        fi
+    done <<< "$plugin_keys"
+  fi
+
+  # -------------------------------------------------------------------------
+  # Phase 3: Compose final verdict.
+  # -------------------------------------------------------------------------
+  local all_passed=true
+  if ! $checks_passed || [ "${#failed_sources[@]}" -gt 0 ]; then
+    all_passed=false
+  fi
+
+  local failure_reason=""
+  if ! $all_passed; then
+    # Join all failure source descriptions with "; ".
+    local first_fail=true
+    local src
+    for src in "${failed_sources[@]}"; do
+      if $first_fail; then
+        failure_reason="$src"
+        first_fail=false
       else
-        # Judge prompt assembly failed
-        judge_verdict="fail"
-        judge_reason="judge prompt assembly failed"
-        judge_passed=false
+        failure_reason="$failure_reason; $src"
       fi
-    fi
+    done
   fi
 
-  # Compose final verdict
-  local passed=true
-  if ! $checks_passed || ([ "$judge_verdict" != "null" ] && ! $judge_passed); then
-    passed=false
-  fi
-
-  # Build failure reason if not passed
-  if ! $passed; then
-    if ! $checks_passed; then
-      failure_reason="One or more checks failed"
-    elif ! $judge_passed; then
-      failure_reason="Judge verdict: $judge_reason"
-    fi
-  fi
-
-  # Build checks JSON array
+  # Build checks JSON array.
   local checks_json_out="["
   local first=true
+  local check_obj
   for check_obj in "${checks_array[@]}"; do
-    if [ "$first" = true ]; then
+    if $first; then
       checks_json_out="$checks_json_out$check_obj"
       first=false
     else
@@ -218,21 +215,32 @@ verify_stage() {
   done
   checks_json_out="$checks_json_out]"
 
-  # Clean up temp files before emitting verdict.
-  _verify_cleanup
+  # Build plugins JSON object from the associative array.
+  local plugins_json="{"
+  local first_plugin=true
+  local pk
+  for pk in "${!plugin_verdicts[@]}"; do
+    local pv="${plugin_verdicts[$pk]}"
+    if $first_plugin; then
+      plugins_json="$plugins_json\"$pk\":$pv"
+      first_plugin=false
+    else
+      plugins_json="$plugins_json,\"$pk\":$pv"
+    fi
+  done
+  plugins_json="$plugins_json}"
 
-  # Emit verdict JSON
+  # Emit verdict JSON.
   jq -n \
-    --argjson passed "$passed" \
+    --argjson passed "$all_passed" \
     --argjson checks "$(printf '%s' "$checks_json_out")" \
-    --arg judge_verdict "$judge_verdict" \
-    --arg judge_reason "$judge_reason" \
+    --argjson plugins "$(printf '%s' "$plugins_json")" \
     --arg failure_reason "$failure_reason" \
     '{
       passed: $passed,
       checks: $checks,
-      judge_verdict: ($judge_verdict | if . == "null" then null else . end),
-      judge_reason: $judge_reason,
+      plugins: $plugins,
+      warnings: [],
       failure_reason: $failure_reason
     }' | jq -c '.'
 }

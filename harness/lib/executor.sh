@@ -109,7 +109,7 @@ executor_run() {
     # 3a: Read all stage fields.
     local stage_name stage_prompt stage_schema stage_tools stage_consumes
     local stage_produces stage_skip_when stage_terminal_when stage_gate
-    local stage_verify_checks stage_verify_judge stage_on_fail stage_max_retries
+    local stage_verify stage_verify_checks stage_verify_judge stage_on_fail stage_max_retries
     local stage_recover_prompt stage_recover_tools stage_backend
 
     stage_name="$(config_stage_field "$i" name)"
@@ -123,6 +123,7 @@ executor_run() {
     stage_skip_when="$(config_stage_field "$i" skip_when 2>/dev/null)" || true
     stage_terminal_when="$(config_stage_field "$i" terminal_when 2>/dev/null)" || true
     stage_gate="$(config_stage_field "$i" gate 2>/dev/null)" || true
+    stage_verify="$(config_stage_field "$i" verify 2>/dev/null)" || true
     stage_verify_checks="$(config_stage_field "$i" verify_checks 2>/dev/null)" || true
     stage_verify_judge="$(config_stage_field "$i" verify_judge 2>/dev/null)" || true
     stage_on_fail="$(config_stage_field "$i" on_fail 2>/dev/null)" || true
@@ -231,11 +232,12 @@ executor_run() {
         _tmp_files+=("$stage_record_dir")
 
         # Write each stage field as an individual file (verify_stage's contract).
-        printf '%s' "$stage_name"          > "$stage_record_dir/name"
-        printf '%s' "$stage_verify_checks" > "$stage_record_dir/checks"
-        printf '%s' "$stage_verify_judge"  > "$stage_record_dir/judge"
-        printf '%s' "$stage_schema"        > "$stage_record_dir/schema"
-        printf '%s' "$stage_backend"       > "$stage_record_dir/backend"
+        printf '%s' "$stage_name"             > "$stage_record_dir/name"
+        printf '%s' "${stage_verify:-{}}"     > "$stage_record_dir/verify"
+        printf '%s' "$stage_verify_checks"    > "$stage_record_dir/checks"
+        printf '%s' "$stage_verify_judge"     > "$stage_record_dir/judge"
+        printf '%s' "$stage_schema"           > "$stage_record_dir/schema"
+        printf '%s' "$stage_backend"          > "$stage_record_dir/backend"
 
         verify_json="$(verify_stage "$stage_record_dir" "$run_dir" "$item" "$co_author")" || true
 
