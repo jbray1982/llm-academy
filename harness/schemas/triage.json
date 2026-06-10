@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "ready": {
+      "type": "boolean",
+      "description": "True if the issue is ready to implement; false if it should be deferred."
+    },
+    "reasoning": {
+      "type": "string",
+      "description": "Detailed explanation of the triage decision."
+    },
+    "defer_label": {
+      "type": "string",
+      "description": "Suggested GitHub label when deferring (e.g. 'blocked', 'needs-design', 'needs-detail')."
+    },
+    "approach": {
+      "type": ["string", "null"],
+      "enum": ["scaffold", "lead-dev", "junior", "direct", null],
+      "description": "Fast-track approach if BA can determine it without architect review. Null means send to architect."
+    }
+  },
+  "required": ["ready", "reasoning"]
+}

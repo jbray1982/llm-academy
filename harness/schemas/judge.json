@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail"],
+      "description": "Judge's verdict: 'pass' if the implementation satisfies the acceptance criteria, 'fail' if not."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Concise explanation of the verdict, citing specific acceptance criteria that passed or failed."
+    }
+  },
+  "required": ["verdict", "reason"]
+}

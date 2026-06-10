@@ -1,0 +1,235 @@
+# harness/config/default.yaml — Feature-flow preset.
+#
+# This is the canonical feature-flow pipeline config, mirroring the stage
+# roles defined in skills/feature-flow/SKILL.md and the behavior of
+# sunken-spires-adventure/tools/batch-process-issues.sh (process_issue).
+#
+# Per-repo customization: pass --config <path> to run.sh with your own config.
+# Override individual prompts by placing same-named .md files next to your
+# config file — path resolution checks the config directory first, then falls
+# back to the canonical harness/prompts/ directory.
+#
+# install.ps1 does not exist yet; harness/ is Linux/macOS only for now.
+
+# Global settings
+backend: claude
+co_author: "Co-Authored-By: Claude <noreply@anthropic.com>"
+run_dir: .harness/runs/{run_id}   # {run_id} = <item>-<UTC ts>; reruns don't clobber history
+
+stages:
+
+  # ---------------------------------------------------------------------------
+  # label-guard — Pure-check stage (no prompt, no LLM call).
+  # Defers issues labeled product-decision-review or planning without spending
+  # any LLM tokens. Zero-cost guard at the pipeline entrance.
+  # ---------------------------------------------------------------------------
+  - name: label-guard
+    verify:
+      checks:
+        - "! gh issue view {item} --json labels --jq '.labels[].name' | grep -q 'product-decision-review'"
+        - "! gh issue view {item} --json labels --jq '.labels[].name' | grep -q 'planning'"
+    on_fail: defer
+
+  # ---------------------------------------------------------------------------
+  # triage — BA readiness assessment.
+  # Emits: ready (bool), approach (scaffold|lead-dev|junior|direct|null),
+  #        defer_label, reasoning.
+  # terminal_when: ready=false → defer cleanly (triage prompt handles gh label/comment).
+  # ---------------------------------------------------------------------------
+  - name: triage
+    prompt: prompts/triage.md
+    schema: schemas/triage.json
+    tools:
+      - "Bash(gh issue view {item}*)"
+      - "Bash(gh issue edit {item}*)"
+      - "Bash(gh issue comment {item}*)"
+    produces: triage
+    terminal_when:
+      field: ready
+      equals: "false"
+      status: deferred
+    on_fail: abort
+
+  # ---------------------------------------------------------------------------
+  # architect — Determines approach when triage didn't fast-track.
+  # skip_when: approach is already set by triage fast-track (not null).
+  # Emits: approach (scaffold|lead-dev|junior|direct|decision-required), reasoning.
+  # terminal_when: decision-required → defer (prompt handles gh comment/label).
+  # ---------------------------------------------------------------------------
+  - name: architect
+    prompt: prompts/architect.md
+    schema: schemas/architect.json
+    tools:
+      - "Read"
+      - "Grep"
+      - "Glob"
+      - "Bash(gh issue view {item}*)"
+      - "Bash(gh issue comment {item}*)"
+      - "Bash(gh issue edit {item}*)"
+      - "Bash(gh issue create *)"
+    consumes:
+      - triage
+    produces: architect
+    skip_when:
+      field: approach
+      negate: true
+      equals: "null"
+    terminal_when:
+      field: approach
+      equals: "decision-required"
+      status: deferred
+    on_fail: abort
+
+  # ---------------------------------------------------------------------------
+  # scaffold-lead — Lead-dev scaffolds interfaces, stubs, manifest.
+  # skip_when: approach != scaffold.
+  # ---------------------------------------------------------------------------
+  - name: scaffold-lead
+    prompt: prompts/scaffold-lead.md
+    tools:
+      - "Read"
+      - "Write"
+      - "Edit"
+      - "Bash(gh issue view {item}*)"
+    consumes:
+      - architect
+    produces: scaffold-lead
+    skip_when:
+      field: approach
+      negate: true
+      equals: "scaffold"
+    on_fail: abort
+
+  # ---------------------------------------------------------------------------
+  # scaffold-junior — Junior-dev implements scaffolded stubs.
+  # skip_when: approach != scaffold.
+  # consumes: scaffold-lead handoff (injected via {{handoff:scaffold-lead}}).
+  # ---------------------------------------------------------------------------
+  - name: scaffold-junior
+    prompt: prompts/scaffold-junior.md
+    tools:
+      - "Read"
+      - "Write"
+      - "Edit"
+      - "Bash(gh issue view {item}*)"
+    consumes:
+      - scaffold-lead
+    skip_when:
+      field: approach
+      negate: true
+      equals: "scaffold"
+    on_fail: abort
+
+  # ---------------------------------------------------------------------------
+  # implement-lead — Lead-dev implements directly (too complex for junior).
+  # skip_when: approach != lead-dev.
+  # ---------------------------------------------------------------------------
+  - name: implement-lead
+    prompt: prompts/implement-lead.md
+    tools:
+      - "Read"
+      - "Write"
+      - "Edit"
+      - "Bash(gh issue view {item}*)"
+    consumes:
+      - architect
+    skip_when:
+      field: approach
+      negate: true
+      equals: "lead-dev"
+    on_fail: abort
+
+  # ---------------------------------------------------------------------------
+  # implement-junior — Junior-dev implements directly (simple, fully specified).
+  # skip_when: approach != junior.
+  # ---------------------------------------------------------------------------
+  - name: implement-junior
+    prompt: prompts/implement-junior.md
+    tools:
+      - "Read"
+      - "Write"
+      - "Edit"
+      - "Bash(gh issue view {item}*)"
+    consumes:
+      - architect
+    skip_when:
+      field: approach
+      negate: true
+      equals: "junior"
+    on_fail: abort
+
+  # ---------------------------------------------------------------------------
+  # implement-direct — Architect implements directly.
+  # skip_when: approach != direct.
+  # ---------------------------------------------------------------------------
+  - name: implement-direct
+    prompt: prompts/implement-direct.md
+    tools:
+      - "Read"
+      - "Write"
+      - "Edit"
+      - "Bash(gh issue view {item}*)"
+    consumes:
+      - architect
+    skip_when:
+      field: approach
+      negate: true
+      equals: "direct"
+    on_fail: abort
+
+  # ---------------------------------------------------------------------------
+  # review — Reviewer checks implementation for correctness and quality.
+  # skip_when: no changes to review (git diff --quiet HEAD means nothing changed).
+  # gate: status must be approved or non_blocking_issues to advance.
+  # on_fail: retry up to 2 times; recover with fix.md between rounds.
+  # The review prompt handles non-blocking follow-up issue creation via gh tools.
+  # ---------------------------------------------------------------------------
+  - name: review
+    prompt: prompts/review.md
+    schema: schemas/review.json
+    tools:
+      - "Read"
+      - "Bash(gh issue view {item}*)"
+      - "Bash(gh issue create *)"
+    produces: review
+    skip_when:
+      command: "git diff --quiet HEAD"
+    gate:
+      field: status
+      in:
+        - "approved"
+        - "non_blocking_issues"
+    verify:
+      judge:
+        prompt: prompts/judge-review.md
+        schema: schemas/judge.json
+    on_fail: retry
+    max_retries: 2
+    recover_prompt: prompts/fix.md
+    recover_tools: "Read,Write,Edit"
+
+  # ---------------------------------------------------------------------------
+  # commit — BA commits and closes the issue.
+  # skip_when: no changes (same guard as review — belt-and-suspenders).
+  # verify.checks: deterministic commit message validation.
+  #   - Commit message contains #{item} reference.
+  #   - Commit message contains Co-Authored-By line.
+  # ---------------------------------------------------------------------------
+  - name: commit
+    prompt: prompts/commit.md
+    tools:
+      - "Bash(git add *)"
+      - "Bash(git commit *)"
+      - "Bash(git status)"
+      - "Bash(git diff *)"
+      - "Bash(git log *)"
+      - "Bash(gh issue view {item}*)"
+      - "Bash(gh issue comment {item}*)"
+      - "Bash(gh issue close {item}*)"
+    skip_when:
+      command: "git diff --quiet HEAD"
+    verify:
+      checks:
+        - "git log -1 --pretty=%B | grep -q '#{item}'"
+        - "git log -1 --pretty=%B | grep -qF 'Co-Authored-By'"
+    on_fail: abort
