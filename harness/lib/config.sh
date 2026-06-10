@@ -127,8 +127,87 @@ config_load() {
   done
 
   # Preflight plugin keys: for each stage's verify: block, every key other than
-  # "checks" must have a corresponding lib/plugins/<key>.sh in the harness or
-  # config directory. An unresolvable plugin key is a config error — fail fast.
+  # "checks" must be declared in a manifest and its declared script must exist
+  # and be executable. An unknown key or missing script is a config error —
+  # fail fast with a message that names the available plugin names.
+  #
+  # Manifest resolution order (config-dir wins on name conflicts):
+  #   1. $_CONFIG_DIR/lib/plugins/manifest.yaml  (consuming repo)
+  #   2. $_HARNESS_DIR/lib/plugins/manifest.yaml (harness-shipped)
+
+  # Build a combined plugin registry: name -> absolute script path.
+  # Process harness manifest first, then config-dir manifest (config-dir wins).
+  declare -A _manifest_scripts=()
+
+  _load_manifest() {
+    local manifest_file="$1"
+    local manifest_dir
+    manifest_dir="$(dirname "$manifest_file")"
+
+    if [ ! -f "$manifest_file" ]; then
+      return 0
+    fi
+
+    # Read all plugin names from the manifest.
+    local names
+    names="$(yq '.plugins | keys | .[]' "$manifest_file" 2>/dev/null)" || true
+
+    local pname
+    while IFS= read -r pname; do
+      [ -z "$pname" ] && continue
+
+      local script_rel
+      script_rel="$(yq ".plugins[\"${pname}\"].script" "$manifest_file" 2>/dev/null)" || true
+      script_rel="${script_rel#\"}"
+      script_rel="${script_rel%\"}"
+
+      if [ -z "$script_rel" ] || [ "$script_rel" = "null" ]; then
+        echo "error: manifest '$manifest_file' entry '$pname' has no script field" >&2
+        return 2
+      fi
+
+      # Resolve script path relative to the manifest's own directory,
+      # unless the path is already absolute.
+      local script_abs
+      if [[ "$script_rel" = /* ]]; then
+        script_abs="$script_rel"
+      else
+        script_abs="$manifest_dir/$script_rel"
+      fi
+
+      # Later calls (config-dir) overwrite earlier ones (harness) — config-dir wins.
+      _manifest_scripts["$pname"]="$script_abs"
+    done <<< "$names"
+    return 0
+  }
+
+  # Load harness manifest first (lower priority).
+  _load_manifest "$_HARNESS_DIR/lib/plugins/manifest.yaml" || return 2
+
+  # Load config-dir manifest second (higher priority — overrides harness entries).
+  if [ -n "$_CONFIG_DIR" ] && [ -f "$_CONFIG_DIR/lib/plugins/manifest.yaml" ]; then
+    _load_manifest "$_CONFIG_DIR/lib/plugins/manifest.yaml" || return 2
+  fi
+
+  # Validate every declared script exists and is executable.
+  local declared_name declared_script
+  for declared_name in "${!_manifest_scripts[@]}"; do
+    declared_script="${_manifest_scripts[$declared_name]}"
+    if [ ! -f "$declared_script" ]; then
+      echo "error: plugin '$declared_name' declared in manifest but script not found: $declared_script" >&2
+      return 2
+    fi
+    if [ ! -x "$declared_script" ]; then
+      echo "error: plugin '$declared_name' declared in manifest but script is not executable: $declared_script" >&2
+      return 2
+    fi
+  done
+
+  # Build a sorted list of available plugin names for error messages.
+  local available_plugins
+  available_plugins="$(printf '%s\n' "${!_manifest_scripts[@]}" | sort | tr '\n' ' ' | sed 's/ $//')"
+
+  # Validate each stage's verify keys against the registry.
   local j
   for ((j = 0; j < stage_count; j++)); do
     local verify_block
@@ -145,16 +224,10 @@ config_load() {
       [ -z "$pk" ] && continue
       [ "$pk" = "checks" ] && continue
 
-      # Config-dir override first, then harness install — matches runtime resolution order.
-      if [ -n "$_CONFIG_DIR" ] && [ -f "$_CONFIG_DIR/lib/plugins/${pk}.sh" ]; then
-        continue
+      if [ -z "${_manifest_scripts[$pk]+set}" ]; then
+        echo "error: unknown plugin key '$pk' in stage $j — not declared in any manifest. Available plugins: ${available_plugins:-none}" >&2
+        return 2
       fi
-      if [ -f "$_HARNESS_DIR/lib/plugins/${pk}.sh" ]; then
-        continue
-      fi
-
-      echo "error: no plugin found for verify key '$pk' in stage $j (checked $_HARNESS_DIR/lib/plugins/ and $_CONFIG_DIR/lib/plugins/)" >&2
-      return 2
     done <<< "$plugin_keys_in_verify"
   done
 

@@ -76,7 +76,7 @@ harness/run.sh <issue-number> [--config <path>]
 Exit codes: `0` completed · `75` deferred (retry later) · `1` aborted · `2` config error.
 
 - [`harness/README.md`](harness/README.md) — invocation, exit codes, per-repo override model, telemetry, installation
-- [`harness/config/README.md`](harness/config/README.md) — full configuration reference: stage fields, predicate forms, approach enum, facts store, path resolution
+- [`harness/config/README.md`](harness/config/README.md) — full configuration reference: stage fields, predicate forms, approach enum, facts store, path resolution, verification plugin manifest
 
 ---
 

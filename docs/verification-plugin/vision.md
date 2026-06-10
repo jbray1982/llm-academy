@@ -2,7 +2,7 @@
 
 ## Vision
 
-The orchestration harness currently verifies stage outputs through two mechanisms baked into `verify.sh`: deterministic shell checks and a holistic LLM judge. The verification plugin system makes verification extensible: a verifier plugin is a bash script with a standard I/O contract, opted into from a stage's `verify:` block by declaring its key. Dropping a new script into `lib/plugins/` and declaring its key in config is sufficient — no changes to the core harness machinery.
+The orchestration harness currently verifies stage outputs through two mechanisms baked into `verify.sh`: deterministic shell checks and a holistic LLM judge. The verification plugin system makes verification extensible: a verifier plugin is a bash script with a standard I/O contract, opted into from a stage's `verify:` block by declaring its key. Declaring a script in the plugin manifest and opting into its key in config is sufficient — no changes to the core harness machinery.
 
 The system ships in two iterations:
 
@@ -17,12 +17,14 @@ An engineer's existing harness config keeps working unchanged — `verify: judge
 
 After #16, an engineer running the harness on a feature that partially misses the spec gets immediate, itemized feedback: "Requirements 2 and 4 have no evidence in the diff (confidence: 0.3, 0.2 — threshold: 0.7)." The retry agent gets those specific requirements as structured feedback, not a vague "the implementation is incomplete."
 
-Over time, teams add new verifier plugins to `lib/plugins/` and opt into them with a one-line config declaration — no changes to the core harness machinery.
+Over time, teams register new verifier plugins in the manifest and opt into them with a one-line config declaration — no changes to the core harness machinery.
 
 ## Mechanics & Systems
 
-- **Plugin contract**: A plugin is a bash script at `lib/plugins/<name>.sh` (under `harness/`). It is invoked with `(stage_record_dir, run_dir, item, co_author)` and writes a verdict JSON object to stdout: `{"passed": true|false, ...}` plus any plugin-specific fields. Its own config (the value of its key in the stage's `verify:` block) is provided as JSON at `stage_record_dir/<name>`; the stage backend is at `stage_record_dir/backend`. Plugins may source harness libs (`prompt.sh`, `backend.sh`, `result.sh`) — they are part of the harness tree, not hermetic.
-- **Plugin dispatch**: `verify.sh` iterates the keys of the stage's `verify:` block. `checks` is the one reserved built-in; every other key dispatches to `lib/plugins/<key>.sh`. Self-registering: dropping a new script in `lib/plugins/` and declaring its key in config is sufficient — no changes to verify.sh. A verify key with no matching plugin script is a config preflight error (fail at load, never silently skip verification).
+- **Plugin contract**: A plugin is a bash script (harness-shipped plugins live at `lib/plugins/<name>.sh` under `harness/`; third-party scripts may live anywhere a manifest can reach). It is invoked with `(stage_record_dir, run_dir, item, co_author)` and writes a verdict JSON object to stdout: `{"passed": true|false, ...}` plus any plugin-specific fields. Its own config (the value of its key in the stage's `verify:` block) is provided as JSON at `stage_record_dir/<name>`; the stage backend is at `stage_record_dir/backend`. Plugins may source harness libs (`prompt.sh`, `backend.sh`, `result.sh`) — they are part of the harness tree, not hermetic.
+- **Plugin dispatch**: `verify.sh` iterates the keys of the stage's `verify:` block. `checks` is the one reserved built-in; every other key is resolved through a plugin manifest (see Manifest declaration below). A verify key not declared in any manifest is a config preflight error (fail at load, never silently skip verification).
+- **Manifest declaration**: plugins are declared in `lib/plugins/manifest.yaml` (harness-shipped) or at `lib/plugins/manifest.yaml` relative to a consuming repo's config file's directory (extends/overrides the harness manifest — config-dir wins on name conflicts). Each entry maps a plugin name to its script path (relative to the manifest's own directory, so third-party plugins can live anywhere). `config_load` validates at preflight that every declared script exists and is executable, and that every verify key in the config is declared in a manifest; the unknown-key error message lists the available plugin names.
+  - As-built (#18): the shipped harness manifest declares only `judge` — diverged from the issue #18 sketch, which declared both `judge` and `tvr`; a declared-but-missing script is a preflight error, so `tvr` enters the manifest when #16 ships `lib/plugins/tvr.sh`.
 - **Verdict composition**: overall `passed` = all checks exit 0 AND every declared plugin reports `passed: true`. Per-plugin results are namespaced in the verdict JSON under `plugins: {<name>: {...}}` — no plugin owns top-level fields, so new plugins never force a schema change. A plugin that crashes or emits unparseable stdout is a verify FAILURE, never a silent pass (generalizing the existing judge rule). `failure_reason` concatenates all failing sources.
 - **Judge plugin** (#15): the current inline judge logic — prompt/schema path resolution, prompt_assemble, backend_invoke, structured verdict extraction — moves into `lib/plugins/judge.sh` verbatim in behavior. Existing `verify: judge:` config keys work unchanged.
 - **TVR two-stage algorithm** (#16):
@@ -51,7 +53,7 @@ Over time, teams add new verifier plugins to `lib/plugins/` and opt into them wi
 
 - A vector store or persistent embedding cache — embeddings are computed fresh each run
 - Simultaneous multi-source spec (issue + handoff in one TVR run) — each stage picks one source
-- Plugin versioning or a registry manifest — discovery is purely filesystem-based
+- Plugin versioning — the manifest entry is where `version`, `author`, `requires`, etc. will live when multi-developer contribution arrives, but none of that is in scope now
 - GUI / dashboard for coverage score visualization
 - Embedding backend configuration per-stage (global only)
 - Migrating `checks` into the plugin framework

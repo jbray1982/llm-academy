@@ -1,0 +1,19 @@
+# harness/lib/plugins/manifest.yaml — harness-shipped plugin declarations.
+#
+# Each entry declares a plugin name, the path to its script (relative to this
+# file's directory), and an optional description. The name is what config
+# authors write in a stage's verify: block; the script path is what the
+# harness resolves at runtime.
+#
+# Two-tier override: a consuming repo may place its own manifest.yaml next to
+# its config file. Entries there extend or override these harness entries;
+# config-dir wins on name conflicts. Script paths in each manifest resolve
+# relative to that manifest's own directory.
+#
+# To add a third-party plugin that lives outside lib/plugins/:
+#   script: ../../vendor/acme/coverage-check.sh   # relative to this manifest
+#   (or an absolute path — absolute paths are used as-is)
+plugins:
+  judge:
+    script: judge.sh
+    description: Holistic LLM judge — catches "this is wrong" (bugs, missing error handling, pattern violations)
