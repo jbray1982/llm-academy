@@ -7,6 +7,9 @@
 # llm-academy pipeline handoffs — regenerated per run, not for version control
 handoffs/
 
+# Claude Code local tool approvals — user-specific, accumulates cross-session noise
+.claude/settings.local.json
+
 # llm-academy symlinks — they point at a local clone, not for version control
 .claude/skills/ba-triage
 .claude/skills/feature-flow
