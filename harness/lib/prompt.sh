@@ -48,13 +48,31 @@ prompt_assemble() {
   content="${content//\{run_dir\}/$run_dir}"
   content="${content//\{co_author\}/$co_author}"
 
-  # Apply {{handoff:NAME}} substitutions
-  # Find all {{handoff:*}} tokens and replace them
-  while [[ $content =~ \{\{handoff:([^}]+)\}\} ]]; do
-    local handoff_name="${BASH_REMATCH[1]}"
+  # Apply {{handoff:NAME}} substitutions.
+  #
+  # Single pass over the DISTINCT names found in the template — handoff bodies
+  # are inserted verbatim and never re-scanned. Two hazards this avoids:
+  #   1. A body that itself contains "{{handoff:...}}" (e.g. a review that
+  #      quotes the template) would otherwise be re-expanded forever.
+  #   2. bash 5.2+ expands an unescaped "&" in a ${var//pat/repl} REPLACEMENT
+  #      to the matched text; a body containing "&" would re-insert the very
+  #      token it replaced. We escape "\" then "&" so the body is literal.
+  # Collect distinct names by consuming a scratch copy (empty replacement —
+  # no "&" hazard there), then replace each once on the real content.
+  local _scan="$content"
+  local -A _handoff_seen=()
+  while [[ $_scan =~ \{\{handoff:([^}]+)\}\} ]]; do
+    local _nm="${BASH_REMATCH[1]}"
+    _handoff_seen["$_nm"]=1
+    _scan="${_scan//\{\{handoff:$_nm\}\}/}"
+  done
+
+  local handoff_name
+  for handoff_name in "${!_handoff_seen[@]}"; do
     local handoff_content
     handoff_content="$(handoff_read "$run_dir" "$handoff_name")" || true
-    # Replace the first occurrence
+    handoff_content="${handoff_content//\\/\\\\}"   # escape backslashes first
+    handoff_content="${handoff_content//&/\\&}"     # then ampersands (bash 5.2 match-ref)
     content="${content//\{\{handoff:$handoff_name\}\}/$handoff_content}"
   done
 

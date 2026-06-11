@@ -41,7 +41,12 @@ _block() {
   local inner=$((width - 2))
   local RESET=$'\033[0m' DIM=$'\033[2m'
 
-  printf '%s\n' "${color}┌─ ${header}${RESET}" >&2
+  # Timestamp every block so a watcher can see when each event arrived and
+  # whether the stream is still advancing.
+  local ts
+  ts="$(date '+%H:%M:%S')"
+
+  printf '%s\n' "${DIM}${ts}${RESET} ${color}┌─ ${header}${RESET}" >&2
   if [ -n "$body" ]; then
     local para
     while IFS= read -r para; do
