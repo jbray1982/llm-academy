@@ -174,10 +174,13 @@ result_eval_predicate() {
 # ---------------------------------------------------------------------------
 # result_normalize  envelope_json  →  structured_output JSON on stdout
 #
-# contract: Extracts .data.structured_output from the claude envelope JSON.
-#   Returns "{}" if the field is absent or null. This is the ONLY place in
-#   the harness that knows the envelope path, so a future backend change
-#   (different envelope shape) is a one-line edit here.
+# contract: Extracts structured output from the claude result event envelope.
+#   The .result field holds the model's text output; when --json-schema was
+#   used, that text is valid JSON matching the schema. This function parses
+#   it as JSON and returns the object; for unstructured stages it returns {}.
+#   Returns "{}" if absent, null, or not valid JSON. This is the ONLY place
+#   in the harness that knows the envelope path — a backend change is a
+#   one-line edit here.
 # ---------------------------------------------------------------------------
 result_normalize() {
   local envelope_json="$1"
@@ -187,16 +190,25 @@ result_normalize() {
     return 0
   fi
 
-  local structured
-  structured="$(printf '%s' "$envelope_json" \
-    | yq '.data.structured_output // {}' -o=json 2>/dev/null)" || true
+  # .result is the model's text output (raw string, not JSON-quoted).
+  local result_field
+  result_field="$(printf '%s' "$envelope_json" | jq -r '.result // empty' 2>/dev/null)" || true
 
-  if [ -z "$structured" ] || [ "$structured" = "null" ]; then
+  if [ -z "$result_field" ] || [ "$result_field" = "null" ]; then
     printf '{}'
     return 0
   fi
 
-  printf '%s' "$structured"
+  # Parse the result string as JSON. Succeeds for schema-constrained stages;
+  # fails silently for unstructured text stages.
+  local parsed
+  parsed="$(printf '%s' "$result_field" | jq -c '.' 2>/dev/null)"
+  if [ -n "$parsed" ] && [ "$parsed" != "null" ]; then
+    printf '%s' "$parsed"
+    return 0
+  fi
+
+  printf '{}'
 }
 
 # ---------------------------------------------------------------------------
