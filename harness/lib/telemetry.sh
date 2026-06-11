@@ -34,7 +34,9 @@ telemetry_record() {
   local failure_reason="$9"
   local started_at="${10}"
   local ended_at="${11}"
-  local usage_json="${12:-{}}"
+  # NB: the default must be quoted — in ${12:-{}} bash ends the expansion at
+  # the FIRST '}', so a set value gets a literal '}' appended, corrupting JSON.
+  local usage_json="${12:-"{}"}"
 
   # Normalise usage_json: fall back to {} if empty or invalid.
   if [ -z "$usage_json" ] || ! printf '%s' "$usage_json" | jq -e '.' >/dev/null 2>&1; then
