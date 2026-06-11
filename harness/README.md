@@ -2,8 +2,9 @@
 
 A headless single-work-item pipeline runner. Executes an ordered list of stages
 defined in YAML config + prompt files, passing context between stages via handoff
-documents. Each stage is gated by deterministic checks and/or an LLM judge; every
-attempt is recorded to JSONL telemetry.
+documents. Each stage is gated by deterministic checks and/or verification
+plugins (the LLM judge ships as the first plugin); every attempt is recorded to
+JSONL telemetry.
 
 ## Invocation
 
@@ -72,8 +73,8 @@ stages:
     verify:
       checks:                     # shell commands; non-zero exit = fail
         - "git log -1 --pretty=%B | grep -q '#{item}'"
-      judge:                      # LLM judge (independent cross-check)
-        prompt: prompts/judge-review.md
+      judge:                      # verification plugin (LLM judge — independent cross-check);
+        prompt: prompts/judge-review.md   # plugin keys resolve via lib/plugins/manifest.yaml
         schema: schemas/judge.json
 
     on_fail: retry    # retry | defer | abort
@@ -103,6 +104,10 @@ Override individual prompts by placing same-named `.md` files next to your confi
 file. Path resolution checks the config file's directory first, then falls back to
 the canonical `harness/prompts/` directory. Everything not overridden inherits
 the canonical harness definition automatically.
+
+Verification plugins follow the same two-tier model: declare repo-local plugins
+(or override harness-shipped ones) in `.harness/lib/plugins/manifest.yaml` next
+to your config file — see the [plugin manifest reference](config/README.md#plugin-manifest).
 
 Example: to use a custom triage prompt for your repo, create
 `.harness/prompts/triage.md` and reference it in your config:

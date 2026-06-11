@@ -97,6 +97,7 @@ The legacy top-level `judge_verdict` / `judge_reason` fields are removed. Nothin
 
 - `lib/plugins/` — new plugins are self-registering via filesystem discovery; zero verify.sh changes required. Spec 002 (TVR) is the first consumer of this hook and the proof it holds.
 - Consuming repos can override a plugin by placing `lib/plugins/<key>.sh` relative to their config dir (same override model as prompts/schemas).
+- As-built (#18, post-MVP): filesystem discovery shipped as specced here, then was superseded by a declared manifest (`lib/plugins/manifest.yaml`) — see vision.md "Manifest declaration".
 
 ## Acceptance Criteria
 

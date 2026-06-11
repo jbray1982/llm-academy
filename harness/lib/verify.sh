@@ -21,8 +21,10 @@
 # never a silent pass. This prevents a broken plugin from allowing bad code through.
 #
 # Built-in phase: "checks" is handled directly here and never dispatched to a plugin.
-# Plugin phase: every other key in verify: {...} maps to lib/plugins/<key>.sh.
-# An unknown key (no plugin file) fails the stage with reason "plugin not found: <key>".
+# Plugin phase: every other key in verify: {...} resolves through the plugin manifest
+#   (harness manifest first, config-dir manifest overrides). config_load has already
+#   validated every key is declared and its script exists/is executable.
+#   An unknown key (not in any manifest) fails the stage with reason "plugin not found: <key>".
 
 # ---------------------------------------------------------------------------
 # verify_stage  stage_record_dir  run_dir  item  co_author  →  verdict JSON on stdout
@@ -31,8 +33,9 @@
 #   stage_record_dir is a directory containing the stage's config fields as
 #   individual text files. Reads stage_record_dir/verify as the full verify:
 #   block JSON object. The "checks" key is handled as a built-in (JSON array of
-#   shell command strings). Every other key dispatches to lib/plugins/<key>.sh,
-#   which receives (stage_record_dir, run_dir, item, co_author) and emits
+#   shell command strings). Every other key is resolved through the plugin
+#   manifest and dispatched to the declared script path, which
+#   receives (stage_record_dir, run_dir, item, co_author) and emits
 #   {"passed":bool,"verdict":"pass"|"fail","reason":"..."} on stdout.
 #   Always emits valid verdict JSON — callers must not parse stderr.
 #
@@ -122,6 +125,52 @@ verify_stage() {
     local plugin_keys
     plugin_keys="$(printf '%s' "$verify_json" | jq -r 'keys[]' 2>/dev/null)" || true
 
+    # Build the manifest registry once per stage (harness first, then
+    # config-dir overrides). config_load has already validated every declared
+    # key, so a missing resolution in the loop below means the stage was
+    # invoked without going through config_load (a programming error) or a
+    # manifest entry's script disappeared after preflight. Either way, fail loudly.
+    local _h="${_HARNESS_DIR:-$HARNESS_DIR}"
+    local _cd="${_CONFIG_DIR:-}"
+
+    # Helper: load one manifest file into a local associative array,
+    # returning "name=script_abs" lines on stdout.
+    _resolve_manifest_scripts() {
+      local mf="$1"
+      local mdir
+      mdir="$(dirname "$mf")"
+      [ -f "$mf" ] || return 0
+      local names
+      names="$(yq '.plugins | keys | .[]' "$mf" 2>/dev/null)" || return 0
+      local n
+      while IFS= read -r n; do
+        [ -z "$n" ] && continue
+        local sr
+        sr="$(yq ".plugins[\"${n}\"].script" "$mf" 2>/dev/null)" || continue
+        sr="${sr#\"}"
+        sr="${sr%\"}"
+        [ -z "$sr" ] || [ "$sr" = "null" ] && continue
+        if [[ "$sr" = /* ]]; then
+          printf '%s=%s\n' "$n" "$sr"
+        else
+          printf '%s=%s/%s\n' "$n" "$mdir" "$sr"
+        fi
+      done <<< "$names"
+    }
+
+    declare -A _v_manifest=()
+    local _entry
+    while IFS= read -r _entry; do
+      [ -z "$_entry" ] && continue
+      _v_manifest["${_entry%%=*}"]="${_entry#*=}"
+    done < <(_resolve_manifest_scripts "$_h/lib/plugins/manifest.yaml")
+    if [ -n "$_cd" ] && [ -f "$_cd/lib/plugins/manifest.yaml" ]; then
+      while IFS= read -r _entry; do
+        [ -z "$_entry" ] && continue
+        _v_manifest["${_entry%%=*}"]="${_entry#*=}"
+      done < <(_resolve_manifest_scripts "$_cd/lib/plugins/manifest.yaml")
+    fi
+
     while IFS= read -r plugin_key; do
       [ -z "$plugin_key" ] && continue
       # "checks" is the built-in — skip it here.
@@ -132,19 +181,14 @@ verify_stage() {
       plugin_config="$(printf '%s' "$verify_json" | jq -c --arg k "$plugin_key" '.[$k]' 2>/dev/null)" || true
       printf '%s' "${plugin_config:-null}" > "$stage_record_dir/$plugin_key"
 
-      # Locate plugin: config-dir override first, then harness install.
+      # Locate plugin via the manifest registry built above.
       local plugin_path=""
-      local _h="${_HARNESS_DIR:-$HARNESS_DIR}"
-      local _cd="${_CONFIG_DIR:-}"
-
-      if [ -n "$_cd" ] && [ -f "$_cd/lib/plugins/${plugin_key}.sh" ]; then
-        plugin_path="$_cd/lib/plugins/${plugin_key}.sh"
-      elif [ -f "$_h/lib/plugins/${plugin_key}.sh" ]; then
-        plugin_path="$_h/lib/plugins/${plugin_key}.sh"
+      if [ -n "${_v_manifest[$plugin_key]+set}" ]; then
+        plugin_path="${_v_manifest[$plugin_key]}"
       fi
 
       if [ -z "$plugin_path" ]; then
-        # No plugin found — fail the stage with a named reason.
+        # No manifest declaration found — fail the stage with a named reason.
         plugin_verdicts["$plugin_key"]='{"passed":false,"verdict":"fail","reason":"plugin not found: '"$plugin_key"'"}'
         failed_sources+=("$plugin_key: plugin not found")
         continue

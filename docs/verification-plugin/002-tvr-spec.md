@@ -94,6 +94,8 @@ embed_backend: openai   # required when any stage declares tvr:
 | `harness/lib/config.sh` | Conditional preflight: `OPENAI_API_KEY` / `curl` / `embed_backend` when any stage declares `tvr:` |
 | `harness/lib/verify.sh`, `harness/lib/executor.sh` | **No changes** — this is the framework-generalization proof |
 
+As-built note (#18, landed before this spec's implementation): plugin discovery is now manifest-based, so `tvr` must additionally be declared in `harness/lib/plugins/manifest.yaml` (a declared-but-missing script is a preflight error, which is why #18 shipped the manifest with only `judge`).
+
 ## Notes for consuming repos
 
 TVR sends spec text and diff content to the configured embedding provider (OpenAI by default) and requirement/evidence text to the LLM backend. Repos with private code should know this before opting in — document in `harness/config/README.md` alongside the `embed_backend` key.

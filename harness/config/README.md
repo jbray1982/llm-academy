@@ -54,6 +54,81 @@ touching the canonical harness.
 
 ---
 
+## Plugin manifest
+
+Verification plugins are declared in `lib/plugins/manifest.yaml`. The harness
+ships one at `harness/lib/plugins/manifest.yaml`; a consuming repo may add its
+own next to its config file (e.g. `.harness/lib/plugins/manifest.yaml`) to
+extend or override harness entries.
+
+### Manifest format
+
+```yaml
+plugins:
+  judge:
+    script: judge.sh                          # relative to this manifest file
+    description: Holistic LLM judge — catches "this is wrong"
+  coverage:
+    script: ../../vendor/acme/coverage-check.sh  # or absolute path
+    description: Third-party coverage plugin from vendor/acme
+```
+
+Each entry maps a plugin **name** (what you write in `verify:`) to:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `script` | yes | Path to the plugin script. Relative paths resolve from the manifest file's own directory. Absolute paths are used as-is. |
+| `description` | no | Human-readable summary; used in error messages and future tooling. |
+
+### Two-tier override
+
+Plugin resolution follows the same config-dir-first pattern as prompts and schemas:
+
+1. `<config-file-directory>/lib/plugins/manifest.yaml` — repo-local manifest wins.
+2. `<harness-directory>/lib/plugins/manifest.yaml` — harness-shipped manifest fallback.
+
+Entries in the repo-local manifest **extend** the harness manifest. If the same
+plugin name appears in both, the repo-local entry wins (script path and all
+fields). This means a consuming repo can:
+
+- Register new plugins not in the harness: add a new name with its own script path.
+- Override a harness plugin's script: redeclare the same name pointing at a
+  different script (e.g. a repo-specific variant of `judge.sh`).
+
+### Preflight validation
+
+`config_load` validates at startup (before any stage runs):
+
+1. Every plugin name declared in any manifest has a script that exists and is
+   executable. A declared-but-missing or non-executable script is a hard preflight
+   error — it prevents a misconfigured plugin from silently failing to run.
+2. Every key in a stage's `verify:` block (other than the built-in `checks`) is
+   declared in at least one manifest. Unknown keys are a preflight error; the
+   error message lists the available plugin names so the fix is obvious.
+
+### Example: adding a repo-local plugin
+
+1. Write your plugin script (e.g. `.harness/lib/plugins/coverage-check.sh`) and
+   make it executable (`chmod +x`).
+2. Create `.harness/lib/plugins/manifest.yaml`:
+   ```yaml
+   plugins:
+     coverage:
+       script: coverage-check.sh
+       description: Repo-specific coverage enforcement
+   ```
+3. Declare it in your stage config:
+   ```yaml
+   verify:
+     coverage:
+       threshold: 80
+   ```
+
+The plugin name (`coverage`) decouples from the filename — the script can live
+anywhere reachable from the manifest.
+
+---
+
 ## Predicate reference
 
 `skip_when`, `terminal_when`, and `gate` all accept the same predicate shapes.
