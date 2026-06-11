@@ -42,20 +42,18 @@ result_merge_facts() {
   local tmp_file
   tmp_file="$(mktemp "${facts_file}.XXXXXX")"
 
-  # yq merge: load facts, overlay structured_json on top (last-writer-wins per field).
-  # Use yq's ireduce to merge two JSON objects.
   local existing
   existing="$(cat "$facts_file")"
 
-  # Use yq to merge: echo the incoming json and merge into existing facts.
-  # yq eval-all 'select(fi==0) * select(fi==1)' merges two YAML/JSON docs.
-  printf '%s\n%s\n' "$existing" "$structured_json" \
-    | yq eval-all 'select(fileIndex==0) * select(fileIndex==1)' - -o=json \
-    > "$tmp_file" 2>/dev/null
-
-  if [ $? -ne 0 ]; then
+  # Merge with jq: slurp both objects and shallow-merge with '+', where the
+  # right operand (incoming) wins on duplicate keys — last-writer-wins per
+  # top-level field, keeping unique keys from both. jq is used (not yq) because
+  # yq reads a newline-separated pair of JSON objects as YAML and fails without
+  # '---' document separators.
+  if ! printf '%s\n%s\n' "$existing" "$structured_json" \
+      | jq -s '.[0] + .[1]' > "$tmp_file" 2>/dev/null; then
     rm -f "$tmp_file"
-    echo "result_merge_facts: yq merge failed — facts.json unchanged" >&2
+    echo "result_merge_facts: jq merge failed — facts.json unchanged" >&2
     return 1
   fi
 
@@ -153,6 +151,9 @@ result_eval_predicate() {
   fi
 
   # Equals predicate.
+  local equals_val
+  equals_val="$(printf '%s' "$predicate_json" | yq '.equals' -o=json 2>/dev/null | tr -d '"')" || true
+  [ -z "$equals_val" ] && equals_val="null"
 
   local matches=1  # default: no match
   if [ "$actual_val" = "$equals_val" ]; then
@@ -175,12 +176,16 @@ result_eval_predicate() {
 # result_normalize  envelope_json  →  structured_output JSON on stdout
 #
 # contract: Extracts structured output from the claude result event envelope.
-#   The .result field holds the model's text output; when --json-schema was
-#   used, that text is valid JSON matching the schema. This function parses
-#   it as JSON and returns the object; for unstructured stages it returns {}.
-#   Returns "{}" if absent, null, or not valid JSON. This is the ONLY place
-#   in the harness that knows the envelope path — a backend change is a
-#   one-line edit here.
+#   The .result field holds the model's text output. Because the backend no
+#   longer constrains output with --json-schema (that flag hangs the CLI), the
+#   model is prompted to emit JSON but may surround it with prose or wrap it in
+#   a ```json fenced block. This function recovers the JSON object in priority
+#   order:
+#     1. .result parses as JSON directly (clean output)
+#     2. a ```json ... ``` (or bare ``` ... ```) fenced block parses as JSON
+#     3. the first balanced {...} span in the text parses as JSON
+#   Returns "{}" if none yield a JSON object. This is the ONLY place in the
+#   harness that knows the envelope path — a backend change is a one-line edit here.
 # ---------------------------------------------------------------------------
 result_normalize() {
   local envelope_json="$1"
@@ -199,13 +204,39 @@ result_normalize() {
     return 0
   fi
 
-  # Parse the result string as JSON. Succeeds for schema-constrained stages;
-  # fails silently for unstructured text stages.
   local parsed
-  parsed="$(printf '%s' "$result_field" | jq -c '.' 2>/dev/null)"
+
+  # 1. Whole result is valid JSON.
+  parsed="$(printf '%s' "$result_field" | jq -ce '.' 2>/dev/null)"
   if [ -n "$parsed" ] && [ "$parsed" != "null" ]; then
     printf '%s' "$parsed"
     return 0
+  fi
+
+  # 2. Fenced code block: ```json ... ``` or ``` ... ```.
+  local fenced
+  fenced="$(printf '%s' "$result_field" \
+    | awk '/^[[:space:]]*```/{ if (inblk){exit} else {inblk=1; next} } inblk{print}')"
+  if [ -n "$fenced" ]; then
+    parsed="$(printf '%s' "$fenced" | jq -ce '.' 2>/dev/null)"
+    if [ -n "$parsed" ] && [ "$parsed" != "null" ]; then
+      printf '%s' "$parsed"
+      return 0
+    fi
+  fi
+
+  # 3. First balanced {...} span anywhere in the text.
+  local span
+  span="$(printf '%s' "$result_field" | sed -n '/{/,/}/p' | tr '\n' ' ')"
+  if [ -n "$span" ]; then
+    # Trim to the outermost braces.
+    span="{${span#*\{}"
+    span="${span%\}*}}"
+    parsed="$(printf '%s' "$span" | jq -ce '.' 2>/dev/null)"
+    if [ -n "$parsed" ] && [ "$parsed" != "null" ]; then
+      printf '%s' "$parsed"
+      return 0
+    fi
   fi
 
   printf '{}'
