@@ -40,10 +40,13 @@ prompt_assemble() {
   local content
   content="$(cat "$prompt_file")"
 
-  # Apply substitutions: {item}, {run_dir}, {co_author}
-  content="${content//{item}/$item}"
-  content="${content//{run_dir}/$run_dir}"
-  content="${content//{co_author}/$co_author}"
+  # Apply substitutions: {item}, {run_dir}, {co_author}.
+  # Braces MUST be escaped: in ${var//{token}/repl}, an unescaped closing brace
+  # terminates the parameter expansion early, deleting the literal "{token" and
+  # appending "/repl}" as text. Escaping keeps {token} as the literal pattern.
+  content="${content//\{item\}/$item}"
+  content="${content//\{run_dir\}/$run_dir}"
+  content="${content//\{co_author\}/$co_author}"
 
   # Apply {{handoff:NAME}} substitutions
   # Find all {{handoff:*}} tokens and replace them

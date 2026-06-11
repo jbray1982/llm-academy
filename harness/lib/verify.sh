@@ -81,8 +81,9 @@ verify_stage() {
         cmd="${cmd#\"}"
         cmd="${cmd%\"}"
 
-        # Substitute {item}
-        cmd="${cmd//{item}/$item}"
+        # Substitute {item}. Braces must be escaped — an unescaped closing brace
+        # terminates the parameter expansion early (see prompt.sh for the full note).
+        cmd="${cmd//\{item\}/$item}"
 
         # Run the command in subshell
         local exit_code=0
