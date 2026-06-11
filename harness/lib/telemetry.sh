@@ -15,8 +15,8 @@
 #
 # contract: Appends exactly one JSONL line to $run_dir/telemetry.jsonl.
 #   The line is always valid JSON even if individual string fields contain
-#   quotes or newlines (values are escaped). Fields match the pinned schema
-#   exactly — adding or renaming a field here requires a schema version bump.
+#   quotes or newlines (jq encodes all string values). Fields match the pinned
+#   schema exactly — adding or renaming a field here requires a schema version bump.
 #   usage_json is optional; when present it is the .usage object from the
 #   claude result event (input_tokens, output_tokens, cache_* counts).
 #   Appends atomically enough for single-process pipelines (no file lock in MVP).
@@ -34,7 +34,9 @@ telemetry_record() {
   local failure_reason="$9"
   local started_at="${10}"
   local ended_at="${11}"
-  local usage_json="${12:-{}}"
+  # NB: the default must be quoted — in ${12:-{}} bash ends the expansion at
+  # the FIRST '}', so a set value gets a literal '}' appended, corrupting JSON.
+  local usage_json="${12:-"{}"}"
 
   # Normalise usage_json: fall back to {} if empty or invalid.
   if [ -z "$usage_json" ] || ! printf '%s' "$usage_json" | jq -e '.' >/dev/null 2>&1; then
@@ -43,23 +45,16 @@ telemetry_record() {
 
   local telemetry_file="$run_dir/telemetry.jsonl"
 
-  # Escape string fields for JSON (minimal escaping)
-  local escape_string
-  escape_string="$failure_reason"
-  escape_string="${escape_string//\\/\\\\}"
-  escape_string="${escape_string//\"/\\\"}"
-  escape_string="${escape_string//$'\n'/\\n}"
-
-  # Build JSON line using jq
+  # Build JSON line using jq (jq encodes all string values correctly)
   local json_line
-  json_line="$(jq -n \
+  json_line="$(jq -nc \
     --arg run_id "$run_id" \
     --arg item "$item" \
     --arg stage "$stage" \
     --arg backend "$backend" \
     --arg attempt "$attempt" \
     --arg status "$status" \
-    --arg failure_reason "$escape_string" \
+    --arg failure_reason "$failure_reason" \
     --arg started_at "$started_at" \
     --arg ended_at "$ended_at" \
     --argjson verify "$verify_json" \
@@ -76,7 +71,7 @@ telemetry_record() {
       ended_at: $ended_at,
       verify: $verify,
       usage: $usage
-    }' | jq -c '.')"
+    }')"
 
   # Append to telemetry file
   if printf '%s\n' "$json_line" >> "$telemetry_file" 2>/dev/null; then

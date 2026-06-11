@@ -189,7 +189,9 @@ executor_run() {
         else
           envelope_json="$(cat "$result_file")"
           usage_json="$(printf '%s' "$envelope_json" | jq -c '.usage // {}' 2>/dev/null)" || true
-          usage_json="${usage_json:-{}}"
+          # Quoted default: ${usage_json:-{}} would append a literal '}' to a
+          # set value (bash ends the expansion at the first '}').
+          usage_json="${usage_json:-"{}"}"
         fi
       fi
 
@@ -240,7 +242,7 @@ executor_run() {
 
         # Write each stage field as an individual file (verify_stage's contract).
         printf '%s' "$stage_name"             > "$stage_record_dir/name"
-        printf '%s' "${stage_verify:-{}}"     > "$stage_record_dir/verify"
+        printf '%s' "${stage_verify:-"{}"}"   > "$stage_record_dir/verify"
         printf '%s' "$stage_verify_checks"    > "$stage_record_dir/checks"
         printf '%s' "$stage_verify_judge"     > "$stage_record_dir/judge"
         printf '%s' "$stage_schema"           > "$stage_record_dir/schema"
