@@ -7,6 +7,9 @@
 # llm-academy pipeline handoffs — regenerated per run, not for version control
 handoffs/
 
+# Orchestration-harness run output — regenerated per run, not for version control
+.harness/runs/
+
 # QA handoff docs — generated artifacts, not for version control
 docs/qa-handoffs/
 

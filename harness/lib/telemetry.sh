@@ -11,12 +11,14 @@
 
 # ---------------------------------------------------------------------------
 # telemetry_record  run_dir  run_id  item  stage  backend  attempt  status
-#                   verify_json  failure_reason  started_at  ended_at
+#                   verify_json  failure_reason  started_at  ended_at  [usage_json]
 #
 # contract: Appends exactly one JSONL line to $run_dir/telemetry.jsonl.
 #   The line is always valid JSON even if individual string fields contain
 #   quotes or newlines (values are escaped). Fields match the pinned schema
 #   exactly — adding or renaming a field here requires a schema version bump.
+#   usage_json is optional; when present it is the .usage object from the
+#   claude result event (input_tokens, output_tokens, cache_* counts).
 #   Appends atomically enough for single-process pipelines (no file lock in MVP).
 #   Never fails silently: if the append fails, prints to stderr and returns 1.
 # ---------------------------------------------------------------------------
@@ -32,6 +34,12 @@ telemetry_record() {
   local failure_reason="$9"
   local started_at="${10}"
   local ended_at="${11}"
+  local usage_json="${12:-{}}"
+
+  # Normalise usage_json: fall back to {} if empty or invalid.
+  if [ -z "$usage_json" ] || ! printf '%s' "$usage_json" | jq -e '.' >/dev/null 2>&1; then
+    usage_json="{}"
+  fi
 
   local telemetry_file="$run_dir/telemetry.jsonl"
 
@@ -55,6 +63,7 @@ telemetry_record() {
     --arg started_at "$started_at" \
     --arg ended_at "$ended_at" \
     --argjson verify "$verify_json" \
+    --argjson usage "$usage_json" \
     '{
       run_id: $run_id,
       item: $item,
@@ -65,7 +74,8 @@ telemetry_record() {
       failure_reason: $failure_reason,
       started_at: $started_at,
       ended_at: $ended_at,
-      verify: $verify
+      verify: $verify,
+      usage: $usage
     }' | jq -c '.')"
 
   # Append to telemetry file

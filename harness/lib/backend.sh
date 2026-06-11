@@ -12,7 +12,7 @@
 _HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ---------------------------------------------------------------------------
-# backend_invoke  backend_name  prompt_file  schema_file  tools_csv
+# backend_invoke  backend_name  prompt_file  schema_file  tools_csv  [thinking_file]
 #                 →  envelope JSON on stdout
 #
 # contract: Loads lib/backend-<backend_name>.sh and calls backend_run with
@@ -21,24 +21,24 @@ _HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 #   (naming the file it looked for) and returns 2 (EXIT_CONFIG_ERROR).
 #   schema_file and tools_csv may be empty strings — backends must handle
 #   both absent and present values.
+#   thinking_file is optional; when given, thinking blocks are appended there.
 # ---------------------------------------------------------------------------
 backend_invoke() {
   local backend_name="$1"
   local prompt_file="$2"
   local schema_file="$3"
   local tools_csv="$4"
+  local thinking_file="${5:-}"
 
   local backend_impl="$_HARNESS_DIR/lib/backend-${backend_name}.sh"
 
-  # Check if backend implementation exists
   if [ ! -f "$backend_impl" ]; then
     echo "error: no backend implementation found: lib/backend-${backend_name}.sh" >&2
     return 2
   fi
 
-  # Source the backend and call backend_run
   # shellcheck source=/dev/null
   source "$backend_impl"
 
-  backend_run "$prompt_file" "$schema_file" "$tools_csv"
+  backend_run "$prompt_file" "$schema_file" "$tools_csv" "$thinking_file"
 }

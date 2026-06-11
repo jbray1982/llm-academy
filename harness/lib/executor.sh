@@ -88,6 +88,7 @@ executor_run() {
   esac
 
   mkdir -p "$run_dir/handoffs"
+  mkdir -p "$run_dir/thinking"
   printf '{}' > "$run_dir/facts.json"
   : > "$run_dir/telemetry.jsonl"
 
@@ -138,13 +139,16 @@ executor_run() {
 
     echo "harness: stage[$i] $stage_name" >&2
 
+    # Thinking log for this stage (appended across all retry attempts).
+    local thinking_file="$run_dir/thinking/${stage_name}.log"
+
     # 3b: Evaluate skip_when.
     if [ -n "$stage_skip_when" ] && [ "$stage_skip_when" != "null" ]; then
       if result_eval_predicate "$run_dir" "$stage_skip_when"; then
         echo "harness: skipping stage '$stage_name' (skip_when matched)" >&2
         telemetry_record "$run_dir" "$run_id" "$item" "$stage_name" \
           "$stage_backend" "0" "skipped" "{}" "" \
-          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "{}"
         continue
       fi
     fi
@@ -160,6 +164,7 @@ executor_run() {
       local failure_reason=""
       local stage_status="failed"
       local invoke_ok=true
+      local usage_json="{}"
 
       # 3c-ii: Assemble prompt (pure-check stages have no prompt file).
       local assembled_prompt_file=""
@@ -178,11 +183,13 @@ executor_run() {
       if $invoke_ok && [ -n "$assembled_prompt_file" ]; then
         result_file="$(_mktmp)"
         if ! backend_invoke "$stage_backend" "$assembled_prompt_file" \
-            "$stage_schema" "$stage_tools" > "$result_file"; then
+            "$stage_schema" "$stage_tools" "$thinking_file" > "$result_file"; then
           failure_reason="backend_invoke failed"
           invoke_ok=false
         else
           envelope_json="$(cat "$result_file")"
+          usage_json="$(printf '%s' "$envelope_json" | jq -c '.usage // {}' 2>/dev/null)" || true
+          usage_json="${usage_json:-{}}"
         fi
       fi
 
@@ -196,7 +203,7 @@ executor_run() {
       # Capture raw text (for handoff prose) from envelope.
       local raw_text=""
       if [ -n "$envelope_json" ] && [ "$envelope_json" != "{}" ]; then
-        raw_text="$(result_extract_field "$envelope_json" "data.result")" || true
+        raw_text="$(result_extract_field "$envelope_json" "result")" || true
       fi
 
       # 3c-v: Check terminal_when.
@@ -215,7 +222,7 @@ executor_run() {
 
           telemetry_record "$run_dir" "$run_id" "$item" "$stage_name" \
             "$stage_backend" "$attempt" "$terminal_status" "{}" "" \
-            "$started_at" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            "$started_at" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$usage_json"
 
           exit "$EXIT_DEFERRED"
         fi
@@ -273,7 +280,7 @@ executor_run() {
       ended_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       telemetry_record "$run_dir" "$run_id" "$item" "$stage_name" \
         "$stage_backend" "$attempt" "$stage_status" "$verify_json" \
-        "$failure_reason" "$started_at" "$ended_at"
+        "$failure_reason" "$started_at" "$ended_at" "$usage_json"
 
       # 3c-viii: On pass.
       if $pass; then
@@ -303,7 +310,8 @@ executor_run() {
               if prompt_assemble "$stage_recover_prompt" "$item" "$run_dir" "$co_author" \
                   > "$recover_prompt_file"; then
                 if backend_invoke "$stage_backend" "$recover_prompt_file" \
-                    "" "$stage_recover_tools" > "$recover_result_file"; then
+                    "" "$stage_recover_tools" \
+                    "$run_dir/thinking/${stage_name}-recover.log" > "$recover_result_file"; then
                   recover_envelope="$(cat "$recover_result_file")"
                   local recover_structured
                   recover_structured="$(result_normalize "$recover_envelope")"
