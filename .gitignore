@@ -36,3 +36,6 @@ docs/qa-handoffs/
 .claude/agents/lead-dev.md
 .claude/agents/qa-assist.md
 .claude/agents/reviewer.md
+
+# llm-academy symlinks — they point at a local clone, not for version control
+.claude/agents/documentarian.md
