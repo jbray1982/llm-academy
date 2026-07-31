@@ -157,7 +157,7 @@ Each implementation agent should:
 
 ### Step 4: Review (`/review` skill, foreground)
 
-Invoke the **`/review`** skill via the Skill tool. The skill runs in the foreground and: (1) spawns the `reviewer` subagent as the primary pass; (2) runs an adversarial cross-model pass whenever a secondary model is reachable — via a project's wrapper script or, absent one, a direct CLI probe (see `/review` Step 3); (3) synthesizes both sources, auto-fixes trivial findings inline, and batch-asks the user about substantive ones; (4) writes `handoffs/review-{issue}.md` and returns one of these verdicts on its final line:
+Invoke the **`/review`** skill via the Skill tool. The skill runs in the foreground and: (1) spawns the `reviewer` subagent as the primary pass; (2) runs an adversarial cross-model pass whenever a secondary-model CLI is reachable on `PATH`, which needs no project setup (see `/review` Step 3); (3) synthesizes both sources, auto-fixes trivial findings inline, and batch-asks the user about substantive ones; (4) writes `handoffs/review-{issue}.md` and returns one of these verdicts on its final line:
 
 - `approved` — proceed to commit
 - `non_blocking_issues` — capture each remaining finding (see Step 4a below), then proceed to commit

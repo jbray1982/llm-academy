@@ -57,7 +57,7 @@ Every skill and agent carries a footer like *"if `.llm-academy/<slug>.md` exists
 | **feature-flow** | `/feature-flow <issue-number>` | Run the full implementation pipeline for a single issue (BA triage → architect → implementation → review → PR). Worktree-aware, with a human checkpoint after triage |
 | **tech-debt-analysis** | `/tech-debt-analysis` | Architect-persona codebase audit (dead code, test gaps, pattern violations, tight coupling, parameter proliferation). Deduplicates against backlog and open issues; offers up to five findings for disposition |
 | **feature-log** | `/feature-log` | Query and navigate `FEATURE_LOG.md` — the registry of every named concept in the project's design surface (conviction × status, blocking relationships, `See:` links). Maintained automatically by `/feature-spec`, `/noodle-on`, and `/feature-flow` |
-| **review** | `/review [base-branch]` | Pre-landing review of a branch's diff: primary `reviewer` pass + a cross-model adversarial pass whenever a secondary model is reachable (project wrapper, or a direct CLI probe if none) + synthesis + fix-first (auto-fix trivial, batch-ask substantive). Writes `handoffs/review.md` and emits a verdict `/feature-flow` Step 4 consumes. Headless-safe for CI/batch use |
+| **review** | `/review [base-branch]` | Pre-landing review of a branch's diff: primary `reviewer` pass + a cross-model adversarial pass whenever a secondary-model CLI is on `PATH` (no setup required) + synthesis + fix-first (auto-fix trivial, batch-ask substantive). Writes `handoffs/review.md` and emits a verdict `/feature-flow` Step 4 consumes. Headless-safe for CI/batch use |
 | **handoff** | `/handoff [slug]` | Write a minimal `/tmp/` handoff prompt so a fresh context (post-`/clear`, or a new session for the next step) can resume the current task. Leans on the auto-loaded instructions file + any session-memory index — captures only the edge state those don't already provide |
 | **learn-repo** | `/learn-repo` | Read the repo and write its `.llm-academy/` overlay files — a shared `repo.md` profile plus per-skill guidance — so installed skills/agents customize to the project without being forked. The semantic half of adoption; pairs with the `install.sh` setup script |
 
@@ -89,7 +89,7 @@ feature-creator (if design is unclear)
     → architect (design document)
         → lead-dev (scaffold + manifest)
             → junior-dev (implement bodies)
-                → /review skill (reviewer pass + adversarial pass when a secondary model is reachable + fix-first)
+                → /review skill (reviewer pass + adversarial pass if a secondary CLI is on PATH + fix-first)
                     → ba (commit, close issue)
 ```
 

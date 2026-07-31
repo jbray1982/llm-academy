@@ -1,14 +1,13 @@
 # review — repo specifics
 
-- No wrapper is configured — this project has not adopted a
-  `tools/adversarial-review-pass.sh` (or equivalent), and there's no alternate
-  path to look up. Still check the default path at run time; if someone has since
-  added a wrapper, state (a) wins over this note.
-- That means Step 3 should fall to **state (b)**: probe `command -v` for the
-  default candidate CLIs (`codex`, `gemini`) at run time and, if one is
-  reachable, invoke it directly with the inlined adversarial prompt. Re-probe
-  every session — whether a CLI is currently installed is a point-in-time fact,
-  not something this file should assert one way or the other.
+- No pinned wrapper — this project has not adopted a
+  `tools/adversarial-review-pass.sh` (or equivalent), and doesn't need one.
+  Step 3's probe covers us.
+- So: probe `command -v` for the default candidate CLIs (`codex`, `gemini`) at
+  run time and, if one is reachable, invoke it directly with the adversarial
+  prompt from Step 3. Re-probe every session — whether a CLI is currently
+  installed is a point-in-time fact, not something this file should assert one
+  way or the other.
 - No build/test to run as part of review either way — this is a Markdown-only
   repo. Review the changed prose for correctness instead.
 - Project-specific check categories, in priority order:
