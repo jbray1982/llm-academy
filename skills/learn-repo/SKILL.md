@@ -96,8 +96,22 @@ find it). Common cases:
 | `feature-flow` | Build/test commands, default branch, branch-naming convention, backlog filename, labels, Co-Authored-By line, epic/tracking structure |
 | `ba-triage` | Project-specific defer labels beyond the defaults |
 | `tech-debt-analysis` | Concrete source paths, source extension, priority tiers, which scan categories apply, the settled-decisions doc path |
-| `review` | The adversarial-pass script path (if the project has one), the project's check categories pointer |
+| `review` | The adversarial-pass wrapper script path (if the project has one), any project-specific extension to the default secondary-model CLI candidate list, the project's check categories pointer |
 | `feature-spec` / `noodle-on` / `feature-log` | Whether the project maintains `FEATURE_LOG.md` / `TODOS.md`; the docs/ layout for specs |
+
+**Point-in-time probes vs. durable configuration.** Some overlay content is a
+genuine, durable decision (a chosen wrapper script path, a build command, a
+branch-naming convention) — write that plainly, it doesn't go stale. Other
+content is the *result of an environment probe run right now* (is a secondary-
+model CLI installed and on `PATH`, is a given tool authenticated) — that can
+change between sessions independent of anything about the repo. Write
+probe results with an explicit point-in-time qualifier so a later session reads
+them as a hint to re-check, not as standing fact — e.g. "codex CLI was reachable
+(probed `<YYYY-MM-DD>`; re-probe at run time before relying on this)", stamping
+the actual date at probe time rather than copying one. This applies
+specifically to environment-availability statements (is X installed/reachable),
+not to configuration choices like a wrapper path or candidate-list override —
+those stay durable and unqualified.
 
 Overlay format is free markdown scoped to that skill. Lead with the most
 load-bearing specifics. Example `.llm-academy/feature-flow.md`:

@@ -1,10 +1,15 @@
 # review — repo specifics
 
-- There is **no adversarial-pass script** in this project — run the primary
-  reviewer pass only (or a cross-model pass if explicitly requested). Don't hunt
-  for a script path.
-- No build/test to run as part of review — this is a Markdown-only repo. Review
-  the changed prose for correctness instead.
+- No pinned wrapper — this project has not adopted a
+  `tools/adversarial-review-pass.sh` (or equivalent), and doesn't need one.
+  Step 3's probe covers us.
+- So: probe `command -v` for the default candidate CLIs (`codex`, `gemini`) at
+  run time and, if one is reachable, invoke it directly with the adversarial
+  prompt from Step 3. Re-probe every session — whether a CLI is currently
+  installed is a point-in-time fact, not something this file should assert one
+  way or the other.
+- No build/test to run as part of review either way — this is a Markdown-only
+  repo. Review the changed prose for correctness instead.
 - Project-specific check categories, in priority order:
   1. Overlay footer present on any new/changed skill or agent.
   2. `requires:` / `requires-agents:` frontmatter accurate for any new
