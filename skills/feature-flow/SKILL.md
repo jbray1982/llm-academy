@@ -157,7 +157,7 @@ Each implementation agent should:
 
 ### Step 4: Review (`/review` skill, foreground)
 
-Invoke the **`/review`** skill via the Skill tool. The skill runs in the foreground and: (1) spawns the `reviewer` subagent as the primary pass; (2) runs an optional adversarial cross-model pass if your project has one configured; (3) synthesizes both sources, auto-fixes trivial findings inline, and batch-asks the user about substantive ones; (4) writes `handoffs/review-{issue}.md` and returns one of these verdicts on its final line:
+Invoke the **`/review`** skill via the Skill tool. The skill runs in the foreground and: (1) spawns the `reviewer` subagent as the primary pass; (2) runs an adversarial cross-model pass whenever a secondary model is reachable — via a project's wrapper script or, absent one, a direct CLI probe (see `/review` Step 3); (3) synthesizes both sources, auto-fixes trivial findings inline, and batch-asks the user about substantive ones; (4) writes `handoffs/review-{issue}.md` and returns one of these verdicts on its final line:
 
 - `approved` — proceed to commit
 - `non_blocking_issues` — capture each remaining finding (see Step 4a below), then proceed to commit
@@ -167,7 +167,7 @@ Invoke the **`/review`** skill via the Skill tool. The skill runs in the foregro
 
 **Why foreground:** the skill needs main-context execution for its AskUserQuestion-based fix-first loop, and it blocks the conversation for ~1–5 min when an adversarial pass runs. This is intentional — bundling fix-first and non-blocking capture into one blocking window keeps the user in a single decision flow rather than two.
 
-**Skill failure handling:** if the skill aborts (a reviewer-agent failure surfaces to the user; a missing/optional adversarial tool is handled internally by graceful skip), treat that as a `blocking_issues` verdict and stop the pipeline. Do not silently approve.
+**Skill failure handling:** if the skill aborts (a reviewer-agent failure surfaces to the user; an unreachable or failing adversarial tool is handled internally by graceful skip), treat that as a `blocking_issues` verdict and stop the pipeline. Do not silently approve.
 
 #### Step 4a: Non-blocking finding capture
 

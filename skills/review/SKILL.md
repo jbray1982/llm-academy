@@ -24,7 +24,7 @@ The skill does NOT commit, push, or open PRs — that is the pipeline's commit s
 
 ```
 detect diff → read handoffs → primary pass (reviewer agent)
-            → adversarial pass (optional; skip if not configured) → synthesize
+            → adversarial pass (wrapper, direct CLI fallback, or skip) → synthesize
             → fix-first (auto-fix trivial, batch-ask substantive)
             → write handoffs/review-{issue}.md → return verdict
 ```
@@ -103,23 +103,53 @@ The agent's prompt must include:
 
 ## Step 3: Adversarial pass (cross-model second opinion, optional)
 
-A second, independent model reviewing the same diff catches determinism bugs, edge cases, and platform-specific failures the primary pass misses. This step is **optional and tool-agnostic** — wire it up if your project has a secondary-model CLI; skip it cleanly if not.
+A second, independent model reviewing the same diff catches determinism bugs, edge cases, and platform-specific failures the primary pass misses. This step recognizes **three states**, checked in this order. Availability is always **probed at run time** — never assumed from a prior session's notes (see the stale-hint warning at the end of this step).
 
-**Interface contract.** Configure a single script wrapper (reference path: `tools/adversarial-review-pass.sh`) that takes the base branch as `$1`, runs your secondary model against `git diff <base>`, prints findings to stdout, and exits with:
+### (a) Wrapper present
 
-- **exit 3** — the secondary model CLI is not installed/available. Skip Step 3 entirely, print the script's message, continue to Step 4.
-- **exit 0** — it ran; findings are on stdout. Proceed to synthesis.
-- **any other exit** — it ran but errored (auth/timeout/etc.). Non-blocking (the adversarial pass is additive): inspect the error and skip to Step 4 (e.g. auth failure → print "secondary model not authenticated — continuing without adversarial pass").
-
-Wrapping both the availability probe and the run in one script means the whole pass fires a **single** permission prompt — grant `Bash(bash tools/adversarial-review-pass.sh *)` once. Keep the adversarial prompt inside the script (single source of truth).
+If `tools/adversarial-review-pass.sh` exists — or `.llm-academy/review.md` names a different wrapper path — run it:
 
 ```bash
 bash tools/adversarial-review-pass.sh "$BASE"
 ```
 
-Set the Bash tool's `timeout` parameter to `300000` (5 min). Note: macOS has no `timeout` binary, so the Bash-tool timeout is the only bound — don't rely on shell `timeout`.
+It takes the base branch as `$1`, runs your secondary model against `git diff <base>`, prints findings to stdout, and exits with:
 
-If no adversarial tool is configured, skip this step silently and collapse the synthesis (Step 4) to the primary pass only. The adversarial pass is always additive — **its absence never blocks landing.**
+- **exit 3** — the secondary model CLI is not installed/available. Print the script's message, then **fall through to state (b)** and probe the candidate list. exit 3 means *this wrapper's* model is missing, not that no model is reachable — a wrapper wired to one vendor must not suppress a probe that might find another. Only if the probe also comes up empty do you land in state (c).
+- **exit 0** — it ran; findings are on stdout. Proceed to synthesis.
+- **any other exit** — it ran but errored (auth/timeout/etc.). Non-blocking (the adversarial pass is additive): inspect the error and continue to Step 4, reporting the outcome as *attempted but failed* (e.g. auth failure → "secondary model not authenticated — continuing without adversarial pass"). Unlike exit 3, don't fall through: the wrapper's model exists and something else broke, so re-running a different CLI is more likely to compound the problem than fix it.
+
+Wrapping both the availability probe and the run in one script means the whole pass fires a **single** permission prompt — grant `Bash(bash tools/adversarial-review-pass.sh *)` once. Keep the adversarial prompt inside the script (single source of truth) — this is the wrapper's job in state (a).
+
+### (b) No usable wrapper, secondary-model CLI reachable
+
+No wrapper exists (or one exists but reported exit 3), and a secondary-model CLI is reachable on `PATH`. A usable second opinion is one invocation away — don't drop the pass for lack of a script; fall back to invoking the CLI directly. This costs more permission prompts than state (a) (each invocation is its own Bash call, not one wrapped script) — treat that as a reason to *recommend* adding a wrapper for next time, not a reason to skip the pass now.
+
+- **How to probe.** At run time, check `command -v <candidate>` for each candidate CLI in turn. Default candidate list — kept generic and project-agnostic, since this repo ships skills for any consuming project: `codex`, `gemini`. `.llm-academy/review.md` may extend or override this list (add vendors, reorder preference, or restrict to one). Take the first candidate that resolves — but `command -v` only proves the *name* resolves, not that the CLI is authenticated or usable, so if the chosen one errors on invocation, move to the next candidate before concluding state (c).
+- **The inlined adversarial prompt.** No script exists in this state, so the skill itself carries the prompt to inline:
+
+  > The complete diff of this branch against `<base>` follows on stdin. Review it adversarially. Focus on what a first-pass reviewer plausibly missed: edge cases, determinism, platform-specific failure modes, and error paths. For each finding, give the file, the line or range, a one-sentence problem statement, and a one-sentence recommended fix. End with a one-line overall recommendation (approve / non-blocking issues / blocking issues).
+
+  Substitute the resolved base for `<base>`, and say explicitly how the diff reaches the model — it arrives as an unlabeled payload and won't otherwise know what it's looking at or what it's diffed against. Keep the prompt model-agnostic: no vendor-specific flags in the prompt text itself; flags belong in the invocation.
+
+- **The invocation shape.** Exact flags vary per CLI — check `<cli> --help` if you're not sure rather than guessing. Generic shape (diff piped via stdin, the prompt above passed as an argument):
+
+  ```bash
+  git diff "$BASE" | codex exec "<the prompt above, with $BASE substituted>"
+  ```
+
+  Substitute whichever CLI was found reachable for `codex exec`; adjust how the diff reaches it (stdin vs. an argument vs. a temp file) to match that CLI's own interface. Pass the prompt by reference to the blockquote above rather than restating it — one copy, so edits can't drift.
+
+- Same 5-minute Bash-tool timeout as state (a): set the Bash tool's `timeout` parameter to `300000`. macOS has no `timeout` binary, so the Bash-tool timeout is the only bound — don't rely on shell `timeout`.
+- Errors are non-blocking. Once every candidate has been tried and errored, report the outcome as *attempted but failed* and continue to Step 4.
+
+### (c) No secondary model reachable at all
+
+No usable wrapper, and none of the candidate CLIs are on `PATH`. This is the only state that skips **for want of a model**: skip Step 3 silently and collapse the synthesis (Step 4) to the primary pass only. (States (a) and (b) can still end without findings when a model was reachable but failed — that's the distinct *attempted but failed* outcome, not a skip.) The adversarial pass is always additive — **its absence never blocks landing.**
+
+### Stale-hint warning
+
+`.llm-academy/review.md` may legitimately *configure* a wrapper path or extend the candidate CLI list — trust that part, it's durable. But any statement there about whether a tool **is currently installed or reachable** is a point-in-time probe result, not standing configuration — environments change between sessions (a CLI can be installed, or go missing, minutes after the overlay was written). Re-probe with `command -v` (or by attempting the wrapper) at run time regardless of what the overlay claims.
 
 ---
 
@@ -144,7 +174,11 @@ REVIEW SYNTHESIS (N lines against <base>)
 ═══════════════════════════════════════════════════════════
 ```
 
-If the adversarial pass was skipped, the synthesis collapses to just the primary findings — say so explicitly: `Adversarial pass skipped (<reason>).`
+Report Step 3's outcome as exactly one of these three lines — they are distinct, and collapsing them is what issue #35 was about:
+
+- **Ran** — state (a), or state (b) whose findings are included in the synthesis exactly like a wrapper's. When it ran via the fallback, note that rather than treating it as a skip: `Adversarial pass ran via direct CLI invocation (no wrapper configured).`
+- **Attempted but failed** — a model was reachable but the run errored (auth, timeout, non-3 wrapper exit, every candidate CLI failing): `Adversarial pass attempted but failed (<reason>).` The synthesis collapses to the primary findings, but say plainly that a second opinion was available and didn't land — that's a fixable environment problem, not an absent capability.
+- **Skipped** — state (c) only, no secondary model reachable at all: `Adversarial pass skipped (no secondary model available).`
 
 Overlap is computed by file + approximate line range + category. Don't over-engineer the matching — a coarse heuristic is fine. Tag overlapped findings with `[BOTH]` in the synthesis output; they get priority in the next step.
 
@@ -220,7 +254,9 @@ what was skipped, build/test status>
 
 ## Adversarial Pass
 
-<verbatim secondary-model output, or "Skipped (<reason>)" if unavailable>
+<verbatim secondary-model output (wrapper run or direct-CLI fallback); or
+"Attempted but failed (<reason>)" if a model was reachable but the run errored;
+or "Skipped (no secondary model available)" if none was reachable>
 
 ---
 
@@ -252,7 +288,7 @@ VERDICT: <approved|non_blocking_issues|blocking_issues>
 - **No commits, no pushes, no PRs.** The skill never modifies git history. Auto-fixes touch the working tree; commits happen later (in `/feature-flow` Step 6 or by the user manually).
 - **Foreground only when interactive.** In interactive mode the skill blocks the conversation for the duration of the review (~1–5 min when the adversarial pass runs) — necessary for AskUserQuestion-based fix-first.
 - **Headless-safe.** When `CLAUDE_HEADLESS` / `CI` / `BATCH_PROCESSOR` is set, AskUserQuestion is unavailable, or `--headless` is passed: the skill never prompts. AUTO-FIX items are still applied (they need no user input by definition); ASK items are deferred and surfaced through the verdict + findings JSON. The reviewer subagent and adversarial shell-out both work the same way in either mode.
-- **Run the adversarial pass even on small diffs when it's configured.** A 5-line change to determinism or serialization is exactly the kind of thing one model misses; the only gate is "is the secondary model available."
+- **Run the adversarial pass even on small diffs when a secondary model is reachable.** A 5-line change to determinism or serialization is exactly the kind of thing one model misses; the gate is whether *any* secondary model is reachable — wrapper (state a) or direct CLI fallback (state b) — not whether a wrapper script happens to exist.
 - **Reviewer agent owns project-specific check categories.** This skill orchestrates; the agent embodies the conventions. Keep the conventions in one place to avoid drift.
 - **Backlog cross-reference**: if the diff appears to address an open item in the project's backlog file (heuristic match on file paths or symbol names), include a `Possibly closes: <title>` line in the review summary. Non-blocking; surface only.
 
