@@ -157,7 +157,7 @@ Each implementation agent should:
 
 ### Step 4: Review (`/review` skill, foreground)
 
-Invoke the **`/review`** skill via the Skill tool. The skill runs in the foreground and: (1) spawns the `reviewer` subagent as the primary pass; (2) runs an adversarial cross-model pass whenever a secondary-model CLI is reachable on `PATH`, which needs no project setup (see `/review` Step 3); (3) synthesizes both sources, auto-fixes trivial findings inline, and batch-asks the user about substantive ones; (4) writes `handoffs/review-{issue}.md` and returns one of these verdicts on its final line:
+Invoke the **`/review`** skill via the Skill tool. The skill runs in the foreground and: (1) spawns the `reviewer` subagent as the primary pass; (2) runs an adversarial cross-model pass whenever a secondary-model CLI is reachable on `PATH`, which needs no project setup (see `/review` Step 3); (3) synthesizes both sources, auto-fixes trivial findings inline, and batch-asks the user about substantive ones; (4) writes `handoffs/review-{issue}-{round}.md` — one file per review pass, numbered so a re-review after fixes never overwrites the previous round — and returns one of these verdicts on its final line:
 
 - `approved` — proceed to commit
 - `non_blocking_issues` — capture each remaining finding (see Step 4a below), then proceed to commit
@@ -171,7 +171,7 @@ Invoke the **`/review`** skill via the Skill tool. The skill runs in the foregro
 
 #### Step 4a: Non-blocking finding capture
 
-When `/review` returns `non_blocking_issues`, the skill has already written each remaining finding to `handoffs/review-{issue}.md`. Read that file to enumerate the findings. Do **not** silently create follow-up issues. For each finding, classify it and ask the user how to capture it. Use AskUserQuestion with these options:
+When `/review` returns `non_blocking_issues`, the skill has already written each remaining finding to that round's review file. Read the **highest-numbered** `handoffs/review-{issue}-*.md` (falling back to a legacy unnumbered `handoffs/review-{issue}.md`) to enumerate the findings — on a re-review loop the lower-numbered files are earlier rounds, already superseded. Do **not** silently create follow-up issues. For each finding, classify it and ask the user how to capture it. Use AskUserQuestion with these options:
 
 - **`backlog`** — Append to the project's backlog file under the appropriate section with a priority tier and a "Surfaced by:" line referencing this issue. Use for small, well-scoped concerns with a clear file/symbol pointer and no design ambiguity.
 - **`issue`** — Create a GitHub issue (labeled `follow-up-issue`) referencing this issue as the source. Use for findings that need real spec work — design decisions, multi-file refactors, anything that would bloat the backlog file or needs discussion before implementation.

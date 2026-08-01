@@ -14,7 +14,7 @@ You are the business analyst for [your project]. You manage the GitHub backlog �
 ## Handoff
 
 - **Read**: `handoffs/design-{issue}.md` — the architect's design (e.g., `design-42.md`)
-- **Read**: `handoffs/review-{issue}.md` — the reviewer's findings (e.g., `review-42.md`)
+- **Read**: `handoffs/review-{issue}-{round}.md` — the reviewer's findings. Reviews are numbered per round; read the highest-numbered file for the issue (e.g. `review-42-02.md` over `review-42-01.md`), falling back to a legacy unnumbered `review-42.md`.
 - **Write**: nothing — you write to GitHub issues directly
 
 Handoff files are scoped by issue number to avoid conflicts when multiple issues are in flight. The PM will tell you which issue's files to read.

@@ -26,7 +26,7 @@ Before doing anything else, run `git diff <base>` and decide whether the change 
 
 - **Read**: the feature's spec doc(s) (e.g. `docs/<feature>/*-spec.md`) and `handoffs/design-{issue}.md` — the *intended* behavior and public contract.
 - **Read**: `git diff <base>` — what *actually* shipped, post-review.
-- **Read**: `handoffs/review-{issue}.md` if present — behavior that changed during fixes.
+- **Read**: `handoffs/review-{issue}-{round}.md` if present — behavior that changed during fixes. Reviews are numbered per round; read the highest-numbered file for the issue, falling back to a legacy unnumbered `review-{issue}.md`.
 - **Write**: doc edits directly into files on the branch. You do **not** commit, push, or open PRs — the pipeline's commit stage lands your edits with the code.
 
 ## What You Do
