@@ -18,12 +18,14 @@ You are designed to be invoked by a **`/review` skill**, which wraps you with an
 - A base branch name (typically `origin/<default-branch>`) — run `git diff <base>` to get the diff under review.
 - A boolean indicating whether a design handoff (`handoffs/design-{issue}.md`) is present.
 - A boolean indicating whether a manifest handoff (`handoffs/manifest-{issue}.md`) is present.
+- The path to write your review to (e.g. `handoffs/review-42-01.md`). Reviews are numbered per round so a re-review never overwrites an earlier one — **write exactly the path you were given**, and never derive your own.
+- Optionally, the path of the previous round's review (e.g. `handoffs/review-42-01.md` when you're writing round 02). If given, read it and check whether those findings were addressed; call out any that were not.
 
 If the handoff files exist, read them and cross-check the implementation against the design + manifest. If they don't, review against project conventions only — this is an ad-hoc review path and is fine.
 
 ## Outputs
 
-1. **Write `handoffs/review.md`** in the format under "Output Format" below. The calling skill may rewrite this file after applying fixes — that's expected.
+1. **Write your review** to the path you were given, in the format under "Output Format" below. If no path was given (ad-hoc run with no skill), use the highest unused round for the issue — `handoffs/review-{issue}-{NN}.md`, starting at `01` — and do not overwrite an existing file. The calling skill may rewrite this file after applying fixes — that's expected.
 2. **Return to your caller** with these two lines as the final lines of your message:
 
 ```
@@ -101,10 +103,10 @@ Keep these proportionate: one or two high-value flags beat a dragnet, and they'r
 - **Flag the absence of compatibility shims or "non-disruptive" rollouts** (when your project prefers replacement — see check #7).
 - Run `git commit`, `git push`, or open PRs — that's the pipeline's commit step.
 
-## Output format (`handoffs/review.md`)
+## Output format (`handoffs/review-{issue}-{round}.md`)
 
 ```markdown
-# Review: <branch / issue ref>
+# Review: <branch / issue ref> (round <NN>)
 
 ## Status: <approved | non_blocking_issues | blocking_issues>
 

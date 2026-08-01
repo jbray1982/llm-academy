@@ -1,6 +1,6 @@
 ---
 name: next-issue
-description: Auto-compact context and begin working on the next GitHub issue
+description: Pick up the next GitHub issue — select it, summarize it, and open the discussion
 user-invocable: true
 ---
 
@@ -8,19 +8,16 @@ user-invocable: true
 
 > **Repo-specific guidance.** If `.llm-academy/next-issue.md` exists at the repo root, read it before applying this skill — it overrides the generic guidance below for this project. The shared profile `.llm-academy/repo.md`, if present, applies to all skills and agents.
 
-When the user invokes `/next-issue [number]`, compact the conversation context and begin discussion of a new issue. If no issue number is provided, suggest one based on project status.
+When the user invokes `/next-issue [number]`, begin discussion of a new issue. If no issue number is provided, suggest one based on project status.
 
 ## Process
 
-### 1. Compact Context
-- Use the **Bash tool** to run `claude compact` — this actually compacts the conversation and frees up context window before starting fresh on a new issue. The `/compact` slash command cannot be invoked programmatically from within a skill, so you MUST use `Bash("claude compact")` instead.
-
-### 2. Determine the Issue
+### 1. Determine the Issue
 
 **If an issue number was provided** (e.g., `/next-issue 72`):
 - Fetch the issue with GitHub MCP tool `mcp__github__issue_read` (load with ToolSearch if needed)
 - Display the issue title, body, and status
-- Proceed to step 3
+- Proceed to step 2
 
 **If no issue number was provided** (e.g., just `/next-issue`):
 - Check the project board and current milestone for open issues using `mcp__github__list_issues` with milestone and state filters
@@ -30,7 +27,7 @@ When the user invokes `/next-issue [number]`, compact the conversation context a
 - Ask the user which one to work on via **AskUserQuestion** (one option per candidate, each labeled with the issue number + short title; the user can always pick "Other" to name a different issue)
 - Once the user picks one, fetch the full issue details
 
-### 3. Begin Discussion
+### 2. Begin Discussion
 - Display the issue summary (title, acceptance criteria, dependencies)
 - Note any dependencies that are still open (blockers)
 - Identify the key files likely to be touched based on the issue description
@@ -63,7 +60,7 @@ When starting an issue:
 
 ## Notes
 
-- The compact step is critical — it prevents context overflow when switching between issues
+- This skill does **not** compact the conversation. Nothing available to a skill can — `/compact` is a harness command the model cannot invoke, and there is no shell equivalent. If the context is heavy when switching issues, tell the user to run `/compact` themselves first (or `/clear` and re-invoke), and carry on either way.
 - When suggesting issues, prefer issues whose dependencies are all resolved
 - Consider the natural sequencing from tracking/epic issues
 - Don't suggest issues that are assigned to someone else or already in progress
