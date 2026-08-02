@@ -97,6 +97,7 @@ find it). Common cases:
 | `ba-triage` | Project-specific defer labels beyond the defaults |
 | `tech-debt-analysis` | Concrete source paths, source extension, priority tiers, which scan categories apply, the settled-decisions doc path |
 | `review` | The adversarial-pass wrapper script path (if the project has one), any project-specific extension to the default secondary-model CLI candidate list, the project's check categories pointer |
+| `worktree` | Worktree location and branch naming if not the defaults; the exact bootstrap steps a fresh worktree needs (env files to copy, dependency install command, whether to run them unprompted); whether the repo lands via PR at all; remote-branch cleanup policy |
 | `feature-spec` / `noodle-on` / `feature-log` | Whether the project maintains `FEATURE_LOG.md` / `TODOS.md`; the docs/ layout for specs |
 
 **Point-in-time probes vs. durable configuration.** Some overlay content is a
