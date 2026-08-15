@@ -1,7 +1,8 @@
 # feature-spec — repo specifics
 
 - Spec layout: one directory per feature under `docs/<feature>/` — a `vision.md`
-  plus numbered spec files (e.g. `docs/repo-customization/001-mvp-spec.md`).
+  plus numbered spec files (e.g. `docs/repo-customization/001-mvp-spec.md`;
+  live examples: `orchestration-harness`, `verification-plugin`, `qa-handoffs`).
 - This project **maintains `FEATURE_LOG.md`** — register each named feature there
   (see the `/feature-log` skill for vocabulary/format).
 - This project **maintains `TODOS.md`** — park follow-ups and deferred work there
