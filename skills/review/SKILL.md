@@ -16,8 +16,10 @@ The skill does NOT commit, push, or open PRs — that is the pipeline's commit s
 ## Usage
 
 ```
-/review                # base branch defaults to origin/<default-branch>
-/review <base-branch>  # explicit base (e.g. /review origin/feature/foo)
+/review                        # base branch defaults to origin/<default-branch>
+/review <base-branch>          # explicit base (e.g. /review origin/feature/foo)
+/review --no-adversarial       # skip the adversarial pass's CLI probe entirely (see Step 3)
+/review <base-branch> --no-adversarial
 ```
 
 ## Pipeline
@@ -45,6 +47,8 @@ The skill's final output (and the review file's "Status" line) MUST resolve to e
 ## Step 0: Detect base, diff, and execution mode
 
 ```bash
+# Flags (--headless, --no-adversarial) can appear in either order relative to
+# the base branch — strip them out first; whatever's left (if anything) is BASE.
 BASE="${1:-origin/main}"   # set to your repo's default branch
 git fetch origin --quiet 2>/dev/null || true
 DIFF_INS=$(git diff "$BASE" --stat 2>/dev/null | tail -1 | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "0")
@@ -164,7 +168,17 @@ Treat the coordinator's output as the complete primary pass for Step 3 onward �
 
 ## Step 3: Adversarial pass (cross-model second opinion, optional)
 
-A second, independent model reviewing the same diff catches determinism bugs, edge cases, and platform-specific failures the primary pass misses. **This needs no setup** — if a secondary-model CLI is on `PATH`, the pass runs. Availability is always **probed at run time**, never assumed from a prior session's notes (see the stale-hint warning at the end of this step).
+A second, independent model reviewing the same diff catches determinism bugs, edge cases, and platform-specific failures the primary pass misses. **This needs no setup** — if a secondary-model CLI is on `PATH`, the pass runs. Availability is always **probed at run time**, never assumed from a prior session's notes (see the stale-hint warning at the end of this step) — *unless* the user or project has explicitly said not to bother (below).
+
+### Opt-out: skip the probe entirely
+
+A person who knows no secondary CLI is available (or doesn't want the adversarial pass) shouldn't have to sit through a probe that's going to fail anyway. Skip straight to the **Skipped** outcome, no `command -v` checks, when any of:
+
+1. The user passes `--no-adversarial` as an argument to `/review` (alongside or instead of the base branch).
+2. `.llm-academy/review.md` declares an opt-out, e.g. `adversarial: skip` or an equivalent explicit line — the overlay's word on *whether to probe at all* is durable configuration, unlike its word on *current reachability* (see the stale-hint warning, which still applies to any candidate-list config that remains).
+3. The env var `NO_ADVERSARIAL_REVIEW` is set (useful for CI/headless runs that already know no CLI is installed).
+
+When skipped this way, report it exactly like a normal skip in Step 4: `Adversarial pass skipped (no secondary model available).` It's fine to note parenthetically that it was a declared opt-out rather than a failed probe, but it must resolve to the same **Skipped** outcome and never block landing.
 
 ### Probe
 
