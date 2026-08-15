@@ -1,6 +1,6 @@
 ---
 name: review
-description: Pre-landing review of a branch's diff against base. Runs a primary pass through the reviewer subagent, an optional adversarial cross-model pass, synthesizes findings, auto-fixes trivial nits, batch-asks the user about substantive ones, and writes `handoffs/review-{issue}-{round}.md` with a verdict the pipeline consumes.
+description: Pre-landing review of a branch's diff against base. Runs a primary pass through the reviewer subagent (hub-and-spoke on large diffs — per-file spokes plus an integration coordinator), an optional adversarial cross-model pass, synthesizes findings, auto-fixes trivial nits, batch-asks the user about substantive ones, and writes `handoffs/review-{issue}-{round}.md` with a verdict the pipeline consumes.
 user-invocable: true
 requires-agents: [reviewer]
 ---
@@ -23,7 +23,8 @@ The skill does NOT commit, push, or open PRs — that is the pipeline's commit s
 ## Pipeline
 
 ```
-detect diff → read handoffs → primary pass (reviewer agent)
+detect diff → read handoffs → primary pass (single reviewer agent, or
+                                hub-and-spoke: per-file spokes → coordinator hub)
             → adversarial pass (probe for a secondary CLI; skip if none) → synthesize
             → fix-first (auto-fix trivial, batch-ask substantive)
             → write handoffs/review-{issue}-{round}.md → return verdict
@@ -88,29 +89,75 @@ Print a one-line summary: `Reviewing <N> lines against <base>.`
 
 ## Step 1: Read handoff context (optional)
 
-If a design handoff (`handoffs/design-{issue}.md`) or manifest handoff (`handoffs/manifest-{issue}.md`) exists, the skill is being invoked inside `/feature-flow` after architect + implementation. Pass those paths to the reviewer agent so it can check design compliance + manifest completeness.
+If a design handoff (`handoffs/design-{issue}.md`) or manifest handoff (`handoffs/manifest-{issue}.md`) exists, the skill is being invoked inside `/feature-flow` after architect + implementation. Pass those paths to the reviewer agent(s) — on the hub-and-spoke path, both spokes and the coordinator get them — so review checks design compliance + manifest completeness.
 
-If neither file exists, the skill is being run ad-hoc. The reviewer agent reviews against project conventions only (no design/manifest cross-check). This is fine — the workflow degrades gracefully.
+If neither file exists, the skill is being run ad-hoc. Review against project conventions only (no design/manifest cross-check). This is fine — the workflow degrades gracefully.
 
-If `$PREV_REVIEW` is non-empty, this is a **re-review**: an earlier round already ran on this issue. Pass that path to the reviewer agent too, so it can check whether the previous round's findings were actually addressed rather than rediscovering them from scratch.
+If `$PREV_REVIEW` is non-empty, this is a **re-review**: an earlier round already ran on this issue. Pass that path to the reviewer agent(s) too (spokes and/or coordinator, per Step 2), so review can check whether the previous round's findings were actually addressed rather than rediscovering them from scratch.
 
 ---
 
-## Step 2: Primary review pass (reviewer subagent, foreground)
+## Step 2: Primary review pass (hub-and-spoke, reviewer subagents)
 
-Spawn the `reviewer` agent via the Agent tool. The reviewer is the source of truth for your project-specific check categories — keep those rules in the agent definition, not duplicated here. **The skill orchestrates; the agent embodies the conventions.**
+Large changesets suffer from lost-in-the-middle: a single agent holding the whole diff in context tends to under-review files in the middle of the review and under-weight cross-file consistency. To counter this, the primary pass fans out one reviewer agent per file (or per small file group) for close reading, then runs a dedicated coordinator pass over the whole diff for integration issues. Small diffs skip the fan-out entirely — it's not worth the overhead.
 
-The agent's prompt must include:
+The reviewer agent (and its per-file/coordinator variants below) is the source of truth for your project-specific check categories — keep those rules in the agent definition, not duplicated here. **The skill orchestrates; the agent embodies the conventions.**
+
+### Step 2a: Decide fan-out vs. single-pass
+
+Using `$DIFF_TOTAL` (lines changed) and the changed-file count from Step 0:
+
+```bash
+CHANGED_FILES=$(git diff "$BASE" --name-only 2>/dev/null)
+FILE_COUNT=$(echo "$CHANGED_FILES" | grep -c .)
+```
+
+- **File count ≤ 3 AND `$DIFF_TOTAL` < 150** → single-pass (below). One reviewer agent sees the whole diff, same as before.
+- **Otherwise** → hub-and-spoke (Step 2b–2c).
+
+### Step 2b (single-pass path): whole-diff reviewer
+
+Spawn one `reviewer` agent via the Agent tool with the whole diff. The agent's prompt must include:
 
 1. The base branch name (so it runs `git diff <base>` correctly)
 2. Whether the design and manifest handoffs are present
 3. The resolved `$REVIEW_FILE` path, with the instruction to write its findings there in the standard format (see Step 6 below). Pass the path explicitly — the agent must not guess it, or it will clobber an earlier round.
 4. Instruction to return a final-line verdict in the format `VERDICT: <approved|non_blocking_issues|blocking_issues>` followed by a JSON findings array on the next line
 
-**Run foreground** (no `run_in_background`). The skill must have the reviewer's output before proceeding to synthesis.
+Skip Step 2c (there's no per-file/coordinator split); treat this agent's output as the complete primary pass and proceed to Step 3.
+
+### Step 2c (hub-and-spoke path): per-file spokes + coordinator hub
+
+**Spokes — one reviewer agent per file, grouped and capped:**
+
+- If `$FILE_COUNT` ≤ 12: one `reviewer` agent per changed file.
+- If `$FILE_COUNT` > 12: group files (by directory, or evenly) into at most 12 agent calls, each reviewing its group's files together. Never spawn more than 12 spoke agents regardless of file count — bound the fan-out on very large changesets.
+
+Launch all spoke agents **in parallel, in a single message with multiple Agent tool calls** (they're independent). Each spoke agent's prompt must include:
+
+1. The base branch name and the specific file(s) it owns (`git diff <base> -- <file>`), so it reviews only its slice
+2. Whether design/manifest handoffs are present (pass the paths; the spoke may need surrounding context even though its slice is narrow)
+3. The **full list of changed files** in this diff (names only, from `$CHANGED_FILES`) — so the spoke agent can flag "this touches an interface/contract that another changed file likely depends on" even without reading that file itself, rather than silently assuming its file is reviewed in isolation
+4. Instruction to return findings for its file(s) only, in the standard finding format (file, line, severity, description, fix), plus a short list of **integration concerns** — things it suspects need checking against other changed files (e.g. "this renames a public function; verify all call sites were updated") — labeled separately so the coordinator can act on them
+5. No `$REVIEW_FILE` write — spokes report back to the skill; only the skill writes `$REVIEW_FILE` (Step 6)
+
+**Hub — one coordinator agent, after all spokes return:**
+
+Spawn a single `reviewer` agent as coordinator, run foreground, with:
+
+1. The full diff against `$BASE` (whole-diff context, not a slice)
+2. Every spoke agent's findings and integration-concern notes, concatenated
+3. Explicit instruction to focus on what per-file review structurally can't catch: interface/contract mismatches between changed files, call sites not updated for a signature change, duplicated logic introduced across files, inconsistent naming/patterns across the changeset, and whether the integration-concern notes from spokes actually check out
+4. Instruction to *not* re-relitigate findings the spokes already made correctly — only add new integration findings or flag a spoke finding as a false positive
+5. The resolved `$REVIEW_FILE` path and instruction to write the merged result (its own integration findings plus a rollup of spoke findings) there in the standard format (Step 6), and to return the final-line verdict format `VERDICT: <approved|non_blocking_issues|blocking_issues>` followed by a JSON findings array
+
+Treat the coordinator's output as the complete primary pass for Step 3 onward — the spokes' raw output doesn't need separate handling once the coordinator has rolled it up.
+
+**Run foreground** (no `run_in_background`) for the coordinator step — the skill must have its output before proceeding to synthesis. Spokes may run as parallel Agent calls but the skill still waits for all of them before invoking the coordinator (the coordinator needs every spoke's findings).
 
 **Failure handling**:
-- *Interactive*: if the reviewer agent fails or returns no parseable verdict, surface the failure to the user via AskUserQuestion (retry / abort / treat as blocking). Do not silently approve.
+- *A spoke agent fails*: don't abort the whole pass. Note the failed file(s) explicitly to the coordinator ("no automated review ran for `<file>`") so it's visible in the final findings and review file rather than silently skipped.
+- *Interactive*: if the coordinator (or, on the single-pass path, the sole reviewer agent) fails or returns no parseable verdict, surface the failure to the user via AskUserQuestion (retry / abort / treat as blocking). Do not silently approve.
 - *Headless*: same failure → write a minimal `$REVIEW_FILE` with `Status: blocking_issues` and a finding `reviewer agent failed` (include stderr/last-message excerpt). Return `VERDICT: blocking_issues`. Never silently approve in headless.
 
 ---
@@ -183,7 +230,7 @@ Present both reviews to the user under a single header:
 ═══════════════════════════════════════════════════════════
 REVIEW SYNTHESIS (N lines against <base>)
 ═══════════════════════════════════════════════════════════
-  Primary (reviewer agent):
+  Primary (reviewer — single pass, or hub-and-spoke coordinator rollup):
     <N findings, listed by severity>
 
   Adversarial (secondary model):
@@ -311,7 +358,8 @@ VERDICT: <approved|non_blocking_issues|blocking_issues>
 - **Foreground only when interactive.** In interactive mode the skill blocks the conversation for the duration of the review (~1–5 min when the adversarial pass runs) — necessary for AskUserQuestion-based fix-first.
 - **Headless-safe.** When `CLAUDE_HEADLESS` / `CI` / `BATCH_PROCESSOR` is set, AskUserQuestion is unavailable, or `--headless` is passed: the skill never prompts. AUTO-FIX items are still applied (they need no user input by definition); ASK items are deferred and surfaced through the verdict + findings JSON. The reviewer subagent and adversarial shell-out both work the same way in either mode.
 - **Run the adversarial pass even on small diffs.** A 5-line change to determinism or serialization is exactly the kind of thing one model misses. The only gate is whether a secondary model is reachable — never whether anything has been configured.
-- **Reviewer agent owns project-specific check categories.** This skill orchestrates; the agent embodies the conventions. Keep the conventions in one place to avoid drift.
+- **Reviewer agent owns project-specific check categories.** This skill orchestrates; the agent (whether the single-pass reviewer, a spoke, or the coordinator) embodies the conventions. Keep the conventions in one place to avoid drift.
+- **Hub-and-spoke is a performance optimization, not a different review.** The coordinator's rollup should read like one coherent review, not a patchwork of per-file reports — findings still land in the same `$REVIEW_FILE` format either way, and downstream consumers (`/feature-flow`, verdict resolution) don't need to know which path ran.
 - **Backlog cross-reference**: if the diff appears to address an open item in the project's backlog file (heuristic match on file paths or symbol names), include a `Possibly closes: <title>` line in the review summary. Non-blocking; surface only.
 
 ## Calling from `claude -p` (headless)
